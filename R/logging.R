@@ -5,5 +5,6 @@ write_pipeline_log <- function(paths, run_id, line) {
   f
 }
 log_stage <- function(paths, run_id, stage, status="start", details=character()) {
-  write_pipeline_log(paths, run_id, paste(c(sprintf("%s stage=%s status=%s", toupper(status), stage, status), details), collapse=" "))
+  prefix <- switch(status, success_noop="SUCCESS_NOOP", success="SUCCESS", skipped="SKIPPED", failed="FAILED", start="START", running="START", not_run="NOT_RUN", toupper(status))
+  write_pipeline_log(paths, run_id, paste(c(sprintf("%s stage=%s status=%s", prefix, stage, status), details), collapse=" "))
 }
