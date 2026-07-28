@@ -16,3 +16,5 @@ Credentials are read by R through `ecmwfr_PAT`; the token is never printed. The 
 ### Northern-edge recovery
 
 The corrected workflow uses `template_bbox_union`, a one-degree margin, and outward alignment to the ERA5 0.25-degree grid. The former GPKG-only request can leave a fixed northern gap even when values are otherwise plausible. Incomplete daily files are invalid, do not contribute to date planning or climatology, and are quarantined under the active dataset root before the corrected dates are requested. The new request area changes the deterministic raw filename hash; the previous raw file remains available for audit.
+
+The Atlas download stage must be considered successful only when the canonical file exists beneath `$CDS_DATAGRAB_ROOT/data/<profile>/<dataset>/raw`, passes signature and NetCDF metadata validation, and is recorded in the download manifest. A missing or unusable target is a `failed_stage=download` error and leaves a durable run manifest; no processing stage follows. Pipeline logs are under `$CDS_DATAGRAB_ROOT/logs/pipeline`, while SLURM logs are under `$CDS_DATAGRAB_ROOT/logs/slurm`.

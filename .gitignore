@@ -22,6 +22,7 @@ config/local*.yml
 config/local*.yaml
 logs/*.out
 logs/*.err
+logs/
 pipeline_runs/
 # secrets
 secrets.yaml

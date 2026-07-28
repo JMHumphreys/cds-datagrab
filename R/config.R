@@ -60,19 +60,19 @@ resolve_storage_paths <- function(config, project_root, output_root = NULL, crea
   dataset_root <- file.path(root, "data", profile, dataset)
   run_root <- file.path(root, "runs", profile, dataset)
   p <- list(root = root, profile = profile, dataset_id = dataset, dataset_root = dataset_root,
-            raw_dir = file.path(dataset_root, "raw"), extracted_dir = file.path(dataset_root, "extracted"),
+            raw_dir = file.path(dataset_root, "raw"), raw_quarantine_dir = file.path(dataset_root, "quarantine", "raw"), quarantine_dir = file.path(dataset_root, "quarantine"), extracted_dir = file.path(dataset_root, "extracted"),
             daily_dir = file.path(dataset_root, "daily"), weekly_dir = file.path(dataset_root, "weekly"),
             temp_dir = file.path(dataset_root, "temp"), cache_dir = file.path(dataset_root, "cache"),
             runs_root = run_root, run_dir = NULL,
             pipeline_log_dir = file.path(root, "logs", "pipeline", profile, dataset),
             slurm_log_dir = file.path(root, "logs", "slurm", profile),
             root_marker = file.path(root, ".cds-datagrab-root"))
-  path_names <- c("root", "dataset_root", "raw_dir", "extracted_dir", "daily_dir", "weekly_dir", "temp_dir", "cache_dir", "runs_root", "pipeline_log_dir", "slurm_log_dir", "root_marker")
+  path_names <- c("root", "dataset_root", "raw_dir", "raw_quarantine_dir", "quarantine_dir", "extracted_dir", "daily_dir", "weekly_dir", "temp_dir", "cache_dir", "runs_root", "pipeline_log_dir", "slurm_log_dir", "root_marker")
   all_paths <- unname(unlist(p[path_names], use.names = FALSE)); if (any(!vapply(all_paths, .descendant, logical(1), root = root))) stop("Resolved path escaped output root", call. = FALSE)
   if (create) {
     fs::dir_create(root, recurse = TRUE)
     if (file.exists(p$root_marker)) { marker <- tryCatch(jsonlite::read_json(p$root_marker, simplifyVector=TRUE), error=function(e)NULL); if (is.null(marker) || !identical(marker$application, "cds-datagrab")) stop("Existing storage root marker is not owned by cds-datagrab", call.=FALSE) } else jsonlite::write_json(list(application = "cds-datagrab", schema_version = 1L, created_utc = format(Sys.time(), tz = "UTC"), created_by = Sys.info()[["user"]]), p$root_marker, auto_unbox = TRUE, pretty = TRUE)
-    fs::dir_create(unname(unlist(p[c("raw_dir", "extracted_dir", "daily_dir", "weekly_dir", "temp_dir", "cache_dir", "runs_root", "pipeline_log_dir", "slurm_log_dir")], use.names=FALSE)), recurse = TRUE)
+    fs::dir_create(unname(unlist(p[c("raw_dir", "raw_quarantine_dir", "quarantine_dir", "extracted_dir", "daily_dir", "weekly_dir", "temp_dir", "cache_dir", "runs_root", "pipeline_log_dir", "slurm_log_dir")], use.names=FALSE)), recurse = TRUE)
   }
   p
 }
