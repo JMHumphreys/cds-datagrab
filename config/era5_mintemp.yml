@@ -28,9 +28,14 @@ spatial:
     ymin: -2202.99971555688
     ymax: 2835.61878908363
   geometry_tolerance: 0.001
-  api_bbox_buffer_degrees: 0.25
+  request_extent_source: template_bbox_union
+  api_bbox_buffer_degrees: 1.0
+  source_grid_degrees: 0.25
+  align_request_to_source_grid: true
   mask_to_template: true
   mask_to_boundary: false
+  require_complete_template_coverage: true
+  write_coverage_diagnostics: true
 paths:
   root: null
 temporal:
@@ -53,6 +58,7 @@ cds:
   polling_seconds: 30
   batch_workers: 1
 processing:
+  invalid_output_action: quarantine
   source_units: K
   output_units: degC
   unit_conversion: kelvin_to_celsius

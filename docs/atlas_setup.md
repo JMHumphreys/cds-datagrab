@@ -13,3 +13,6 @@ OBSERVED_END=2026-07-03 bash hpc/submit_era5_mintemp.sh
 ```
 
 Credentials are read by R through `ecmwfr_PAT`; the token is never printed. The root marker `.cds-datagrab-root` identifies the storage root and is required for destructive operations.
+### Northern-edge recovery
+
+The corrected workflow uses `template_bbox_union`, a one-degree margin, and outward alignment to the ERA5 0.25-degree grid. The former GPKG-only request can leave a fixed northern gap even when values are otherwise plausible. Incomplete daily files are invalid, do not contribute to date planning or climatology, and are quarantined under the active dataset root before the corrected dates are requested. The new request area changes the deterministic raw filename hash; the previous raw file remains available for audit.

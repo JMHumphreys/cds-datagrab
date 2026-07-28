@@ -23,3 +23,8 @@ config/local*.yaml
 logs/*.out
 logs/*.err
 pipeline_runs/
+# secrets
+secrets.yaml
+
+# local data
+/local

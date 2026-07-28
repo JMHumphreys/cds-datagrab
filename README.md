@@ -19,3 +19,8 @@ Rscript scripts/run_pipeline.R --config config/era5_mintemp_smoke.yml --mode dow
 Inspect a downloaded target without modifying it with `Rscript scripts/inspect_smoke_download.R <path>`.
 
 CDS returns a valid NetCDF4/HDF5 file for the smoke request. Atlas GDAL may not open that file as a raster, so `ncdf4` is the primary raw-data reader; `terra` remains the projection, masking, validation, and GeoTIFF-writing engine. The `number` variable is ignored and `t2m` is selected explicitly. Direct NetCDF files do not need archive extraction, so `extracted/` may remain empty. Processing is resumable from the existing raw file.
+## ERA5 spatial coverage
+
+The raster template is the authoritative output domain. The CDS request area is derived from the union of the template's non-NA geographic footprint and `study_bbox.gpkg`, expanded by a one-degree interpolation margin and aligned outward to the 0.25-degree ERA5 grid. The original GPKG-only area (with a 0.25-degree margin) did not reach the northern template cells, producing the fixed 529-cell gap.
+
+Standardization performs one `terra::project(..., method = "bilinear")` operation followed by the template mask. Complete cellwise template coverage is mandatory; a second `resample()` or extrapolation cannot recover values absent from the source extent. Existing incomplete daily products are invalid observations and are planned for re-request and quarantined during execution. The request-area definition is included in the deterministic raw filename hash, so changing the area creates a new raw target while preserving the old file.

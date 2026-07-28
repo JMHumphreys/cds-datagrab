@@ -19,8 +19,13 @@ spatial:
   expected_dimensions: {rows: 202, columns: 293, layers: 1}
   expected_extent: {xmin: -4361.41088177553, xmax: 2962.12966365311, ymin: -2202.99971555688, ymax: 2835.61878908363}
   geometry_tolerance: 0.001
-  api_bbox_buffer_degrees: 0.25
+  request_extent_source: template_bbox_union
+  api_bbox_buffer_degrees: 1.0
+  source_grid_degrees: 0.25
+  align_request_to_source_grid: true
   mask_to_template: true
+  require_complete_template_coverage: true
+  write_coverage_diagnostics: true
 paths:
   root: null
 temporal:
@@ -42,7 +47,7 @@ cds:
   request_timeout_seconds: 7200
   polling_seconds: 30
   batch_workers: 1
-processing: {source_units: K, output_units: degC, unit_conversion: kelvin_to_celsius, resampling_method: bilinear, longitude_handling: auto, overwrite_observed_overlap: true, delete_replaced_estimates: true, datatype: FLT4S, compression: DEFLATE, gdal_predictor: 3, tiled: true, naflag: -9999}
+processing: {source_units: K, output_units: degC, unit_conversion: kelvin_to_celsius, resampling_method: bilinear, longitude_handling: auto, overwrite_observed_overlap: true, delete_replaced_estimates: true, invalid_output_action: quarantine, datatype: FLT4S, compression: DEFLATE, gdal_predictor: 3, tiled: true, naflag: -9999}
 weekly: {aggregation: min, require_complete_week: true, expected_days: 7}
 future: {daily_enabled: false, weekly_enabled: false, use_observed_donors_only: true, week53_method: adjacent_weeks_mean, overwrite_estimates: true}
 validation: {minimum_celsius: -100, maximum_celsius: 70, require_exact_template_geometry: true, fail_on_duplicate_observed_dates: true, fail_on_unparsed_observed_names: false}

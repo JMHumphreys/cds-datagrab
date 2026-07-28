@@ -5,6 +5,8 @@
 ^tests/
 ^runtime/
 ^logs/
-^\.git
+^\.git($|/)
 ^local/
 ^\.codex/
+^.*\.Rproj$
+^\.Rproj\.user$
