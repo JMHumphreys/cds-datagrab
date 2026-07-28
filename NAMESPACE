@@ -1,4 +1,5 @@
-export(read_pipeline_config, resolve_project_root, expand_config_environment,
+export(build_pipeline_option_parser, parse_pipeline_args, resolve_execution_choice,
+read_pipeline_config, resolve_project_root, expand_config_environment,
 resolve_config_paths, validate_pipeline_config, ensure_pipeline_directories,
 format_daily_filename, format_weekly_filename, parse_grid_filename,
 inventory_grid_directory, summarize_grid_inventory, find_inventory_conflicts,
@@ -12,5 +13,7 @@ process_downloaded_mintemp, validate_raster_against_template,
 validate_daily_output, validate_weekly_output, identify_affected_iso_weeks,
 aggregate_daily_to_weekly, build_daily_climatology, build_weekly_climatology,
 fill_future_daily_analogs, fill_future_weekly_analogs, initialize_run_manifest,
-record_manifest_event, finalize_run_manifest, run_era5_mintemp_pipeline)
+record_manifest_event, finalize_run_manifest, run_era5_mintemp_pipeline,
+resolve_storage_paths, template_fingerprint, validate_template_crs,
+validate_template_geometry)
 importFrom(utils, unzip)

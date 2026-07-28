@@ -1,5 +1,6 @@
 project:
-  dataset_id: era5_mintemp_daily
+  dataset_id: era5_mintemp
+  profile: production
   output_prefix: mintemp
 spatial:
   template_path: spatial_domain/study_area_raster.tif
@@ -31,11 +32,7 @@ spatial:
   mask_to_template: true
   mask_to_boundary: false
 paths:
-  local_data_root: runtime
-  raw_subdir: raw_data/ERA5_min_temp_daily
-  daily_subdir: processed_data/mintemp_daily
-  weekly_subdir: processed_data/mintemp_weekly
-  run_subdir: pipeline_runs/cds_datagrab
+  root: null
 temporal:
   initial_start_date: '2022-01-01'
   observed_end: auto

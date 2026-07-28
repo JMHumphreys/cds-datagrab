@@ -1,5 +1,6 @@
 project:
-  dataset_id: era5_mintemp_daily
+  dataset_id: era5_mintemp
+  profile: smoke
   output_prefix: mintemp
 spatial:
   template_path: spatial_domain/study_area_raster.tif
@@ -21,11 +22,7 @@ spatial:
   api_bbox_buffer_degrees: 0.25
   mask_to_template: true
 paths:
-  local_data_root: runtime
-  raw_subdir: raw_data/ERA5_min_temp_daily_smoke
-  daily_subdir: processed_data/mintemp_daily_smoke
-  weekly_subdir: processed_data/mintemp_weekly_smoke
-  run_subdir: pipeline_runs/cds_datagrab_smoke
+  root: null
 temporal:
   initial_start_date: '2026-07-01'
   observed_end: '2026-07-03'

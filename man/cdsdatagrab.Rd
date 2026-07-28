@@ -10,6 +10,7 @@
 \alias{validate_raster_against_template}\alias{validate_daily_output}\alias{validate_weekly_output}\alias{identify_affected_iso_weeks}\alias{aggregate_daily_to_weekly}
 \alias{build_daily_climatology}\alias{build_weekly_climatology}\alias{fill_future_daily_analogs}\alias{fill_future_weekly_analogs}
 \alias{initialize_run_manifest}\alias{record_manifest_event}\alias{finalize_run_manifest}\alias{run_era5_mintemp_pipeline}
+\alias{build_pipeline_option_parser}\alias{parse_pipeline_args}\alias{resolve_execution_choice}\alias{resolve_storage_paths}\alias{template_fingerprint}\alias{validate_template_crs}\alias{validate_template_geometry}
 \title{Configuration-driven ERA5 minimum-temperature pipeline}
 \description{Reusable functions for inventory, planning, spatial standardization, validation, aggregation, and audit manifests.}
 \keyword{internal}

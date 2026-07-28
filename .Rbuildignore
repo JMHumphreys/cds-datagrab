@@ -5,3 +5,6 @@
 ^tests/
 ^runtime/
 ^logs/
+^\.git
+^local/
+^\.codex/
