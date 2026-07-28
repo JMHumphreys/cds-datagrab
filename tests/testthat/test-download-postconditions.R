@@ -17,3 +17,7 @@ test_that("missing, zero-byte, and HTML transfers fail at download postcondition
   base <- file.path(getwd(),".test-download-root-fail"); if(dir.exists(base)) unlink(base,recursive=TRUE); on.exit(unlink(base,recursive=TRUE),add=TRUE); p <- resolve_storage_paths(list(project=list(profile="smoke",dataset_id="era5_mintemp"),paths=list(root=NULL)),getwd(),base,create=TRUE); req <- list(dataset_short_name="derived-era5-single-levels-daily-statistics",product_type="reanalysis",variable="2m_temperature",daily_statistic="daily_minimum",time_zone="utc+00:00",frequency="6_hourly",data_format="netcdf",download_format="unarchived",year="2026",month="07",day="01",area=c(42.75,-126,-1.25,-34),target="bad.nc")
   expect_error(download_cds_requests(list(req),paths=p,dry_run=FALSE,transfer_fun=function(...) NULL),"failed_stage=download"); expect_error(download_cds_requests(list(req),paths=p,dry_run=FALSE,overwrite=TRUE,transfer_fun=function(r,target) { file.create(target); NULL }),"failed_stage=download")
 })
+
+test_that("missing targets have unknown request match", {
+  x <- validate_downloaded_target(file.path(getwd(),"definitely-missing-target.nc"),list(target="definitely-missing-target.nc")); expect_true(is.na(x$request_match)); expect_false(x$valid)
+})
