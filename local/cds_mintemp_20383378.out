@@ -1,40 +1,0 @@
-atlas-0004
-Mon Jul 27 10:28:49 PM CDT 2026
-?? logs/
-21074a120ba24f19a5a9b666edd6acd1ade8dc6c
-
-Currently Loaded Modules:
-  1) intel-oneapi-mkl/2023.2.0   4) r/4.5.1          7) proj/9.7.0
-  2) xz/5.6.3                    5) udunits/2.2.28   8) geos/3.14.0
-  3) zlib-ng/2.2.4               6) gdal/3.11.4
-
- 
-
-R version 4.5.1 (2025-06-13) -- "Great Square Root"
-Copyright (C) 2025 The R Foundation for Statistical Computing
-Platform: x86_64-pc-linux-gnu
-
-R is free software and comes with ABSOLUTELY NO WARRANTY.
-You are welcome to redistribute it under the terms of the
-GNU General Public License versions 2 or 3.
-For more information about these matters see
-https://www.gnu.org/licenses/.
-
-         component              purpose available version
-terra        terra   spatial processing      TRUE  1.8.93
-sf              sf   spatial processing      TRUE  1.0.24
-yaml          yaml          development      TRUE  2.3.12
-jsonlite  jsonlite          development      TRUE   2.0.0
-digest      digest          development      TRUE  0.6.39
-ISOweek    ISOweek          development      TRUE   0.6.2
-testthat  testthat              testing      TRUE   3.3.2
-ncdf4        ncdf4      NetCDF fallback      TRUE    1.24
-ecmwfr      ecmwfr         CDS download      TRUE   2.0.3
-optparse  optparse                  CLI      TRUE   1.8.2
-1                R Atlas system library      TRUE   4.5.1
-2             GDAL Atlas system library      TRUE  3.11.4
-3             PROJ Atlas system library      TRUE   9.7.0
-4             GEOS Atlas system library      TRUE  3.14.0
-Rscript scripts/run_pipeline.R --config config/era5_mintemp_smoke.yml --mode full --output-root /project/disease_ecology/cds-datagrab-output --execute --observed-end 2026-07-03
-CDS token validation will occur inside R.
-  |                                                                              |                                                                      |   0%  |                                                                              |===                                                                   |   5%  |                                                                              |=======                                                               |  10%  |                                                                              |==========                                                            |  15%  |                                                                              |==============                                                        |  20%  |                                                                              |==================                                                    |  25%  |                                                                              |=====================                                                 |  30%  |                                                                              |=========================                                             |  36%  |                                                                              |============================                                          |  41%  |                                                                              |================================                                      |  46%  |                                                                              |====================================                                  |  51%  |                                                                              |=======================================                               |  56%  |                                                                              |===========================================                           |  61%  |                                                                              |==============================================                        |  66%  |                                                                              |==================================================                    |  71%  |                                                                              |======================================================                |  77%  |                                                                              |=========================================================             |  82%  |                                                                              |=============================================================         |  87%  |                                                                              |================================================================      |  92%  |                                                                              |====================================================================  |  97%  |                                                                              |======================================================================| 100%

@@ -1,0 +1,11 @@
+select_active_raw_inputs <- function(request_records, download_results=NULL, raw_inventory=NULL) {
+  if(!length(request_records)) return(list(active=character(),reused_matching=character(),unmatched=raw_inventory %||% character(),superseded=raw_inventory %||% character(),invalid=character()))
+  targets <- vapply(request_records,function(x)x$target,character(1)); hashes <- vapply(request_records,function(x)x$request_hash %||% NA_character_,character(1)); raw_paths <- if(is.null(raw_inventory)) character() else if(is.data.frame(raw_inventory)) raw_inventory$path else raw_inventory; raw_names <- basename(raw_paths); matching <- raw_paths[raw_names %in% targets]; active <- character(); reused <- character(); invalid <- character()
+  for(req in request_records) { p <- matching[basename(matching)==req$target]; if(length(p)!=1L) next; vr <- validate_downloaded_target(p,req); if(vr$valid) { active <- c(active,p); if(!is.null(download_results) && any(download_results$target_filename==req$target & download_results$status=="reused_existing",na.rm=TRUE)) reused <- c(reused,p) } else invalid <- c(invalid,p) }
+  unmatched <- setdiff(raw_paths,matching); superseded <- unmatched[grepl("_[0-9a-fA-F]{8}\\.nc$",basename(unmatched))]; list(active=unique(active),reused_matching=unique(reused),unmatched=unmatched,superseded=superseded,invalid=unique(invalid))
+}
+
+map_dates_to_active_raw_sources <- function(raw_inputs, request_records) {
+  rows <- list(); for(req in request_records) { if(!req$target %in% basename(raw_inputs)) next; p <- raw_inputs[basename(raw_inputs)==req$target][1]; ds <- as.Date(sprintf("%s-%s-%s",req$year,req$month,req$day)); for(d in ds) rows[[length(rows)+1L]] <- data.frame(date=d,selected_raw_source=p,request_hash=req$request_hash %||% NA_character_,excluded_sources="",selection_reason="exact_active_request_hash",stringsAsFactors=FALSE) }
+  if(!length(rows)) return(data.frame(date=as.Date(character()),selected_raw_source=character(),request_hash=character(),excluded_sources=character(),selection_reason=character(),stringsAsFactors=FALSE)); out <- do.call(rbind,rows); if(anyDuplicated(out$date)) stop("Multiple active raw sources provide the same date",call.=FALSE); out
+}
