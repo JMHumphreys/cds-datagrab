@@ -1,0 +1,7 @@
+^config/
+^docs/
+^hpc/
+^scripts/
+^tests/
+^runtime/
+^logs/

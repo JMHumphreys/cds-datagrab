@@ -1,0 +1,1 @@
+if(nzchar(Sys.getenv("ecmwfr_PAT", ""))) { message("ecmwfr_PAT is set; token was not printed or stored.") } else if(requireNamespace("ecmwfr", quietly=TRUE)) { message("Run ecmwfr::wf_set_key() interactively on a secure login node.") } else stop("Install ecmwfr first.")

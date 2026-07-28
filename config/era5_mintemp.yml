@@ -1,0 +1,62 @@
+project:
+  dataset_id: era5_mintemp_daily
+  output_prefix: mintemp
+spatial:
+  template_path: spatial_domain/study_area_raster.tif
+  bbox_path: spatial_domain/study_bbox.gpkg
+  api_bbox_buffer_degrees: 0.25
+  mask_to_boundary: false
+paths:
+  local_data_root: runtime
+  raw_subdir: raw_data/ERA5_min_temp_daily
+  daily_subdir: processed_data/mintemp_daily
+  weekly_subdir: processed_data/mintemp_weekly
+  run_subdir: pipeline_runs/cds_datagrab
+temporal:
+  initial_start_date: '2022-01-01'
+  observed_end: auto
+  source_lag_days: 7
+  overlap_days: 14
+  future_end_date: '2027-12-31'
+cds:
+  dataset_short_name: derived-era5-single-levels-daily-statistics
+  product_type: reanalysis
+  variable: 2m_temperature
+  daily_statistic: daily_minimum
+  time_zone: utc+00:00
+  frequency: 6_hourly
+  data_format: netcdf
+  download_format: unarchived
+  request_chunk: month
+  request_timeout_seconds: 7200
+  polling_seconds: 30
+  batch_workers: 1
+processing:
+  source_units: K
+  output_units: degC
+  unit_conversion: kelvin_to_celsius
+  resampling_method: bilinear
+  longitude_handling: auto
+  overwrite_observed_overlap: true
+  delete_replaced_estimates: true
+  datatype: FLT4S
+  compression: DEFLATE
+  gdal_predictor: 3
+  tiled: true
+  naflag: -9999
+weekly:
+  aggregation: min
+  require_complete_week: true
+  expected_days: 7
+future:
+  daily_enabled: false
+  weekly_enabled: true
+  use_observed_donors_only: true
+  week53_method: adjacent_weeks_mean
+  overwrite_estimates: true
+validation:
+  minimum_celsius: -100
+  maximum_celsius: 70
+  require_exact_template_geometry: true
+  fail_on_duplicate_observed_dates: true
+  fail_on_unparsed_observed_names: false

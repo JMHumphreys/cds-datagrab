@@ -1,0 +1,96 @@
+* using log directory 'D:/Github/cds-datagrab/..Rcheck'
+* using R version 4.5.0 (2025-04-11 ucrt)
+* using platform: x86_64-w64-mingw32
+* R was compiled by
+    gcc.exe (GCC) 14.2.0
+    GNU Fortran (GCC) 14.2.0
+* running under: Windows 10 x64 (build 19045)
+* using session charset: UTF-8
+* using options '--no-manual --no-vignettes'
+* checking for file './DESCRIPTION' ... OK
+* checking extension type ... Package
+* this is package 'cdsdatagrab' version '0.1.0'
+* package encoding: UTF-8
+* checking package namespace information ... OK
+* checking package dependencies ... INFO
+Packages suggested but not available for checking: 'ecmwfr', 'optparse'
+* checking if this is a source package ... OK
+* checking if there is a namespace ... OK
+* checking for executable files ... OK
+* checking for hidden files and directories ... NOTE
+Found the following hidden files and directories:
+  .gitignore
+  ..Rcheck
+  .git
+These were most likely included in error. See section 'Package
+structure' in the 'Writing R Extensions' manual.
+* checking for portable file names ... NOTE
+Found the following non-portable file path:
+  cdsdatagrab/.git/refs/codex/turn-diffs/captures/1785196889643/9247b549-843a-4dfc-a3ce-ec7fc28ee8ab/base
+
+Tarballs are only required to store paths of up to 100 bytes and cannot
+store those of more than 256 bytes, with restrictions including to 100
+bytes for the final component.
+See section 'Package structure' in the 'Writing R Extensions' manual.
+* checking whether package 'cdsdatagrab' can be installed ... OK
+* checking installed package size ... OK
+* checking package directory ... OK
+* checking DESCRIPTION meta-information ... NOTE
+License components which are templates and need '+ file LICENSE':
+  MIT
+Checking should be performed on sources prepared by 'R CMD build'.
+* checking top-level files ... NOTE
+File
+  LICENSE
+is not mentioned in the DESCRIPTION file.
+* checking for left-over files ... OK
+* checking index information ... OK
+* checking package subdirectories ... WARNING
+Found the following directory with the name of a check directory:
+  ./..Rcheck
+Most likely, these were included erroneously.
+* checking code files for non-ASCII characters ... OK
+* checking R files for syntax errors ... OK
+* checking whether the package can be loaded ... OK
+* checking whether the package can be loaded with stated dependencies ... OK
+* checking whether the package can be unloaded cleanly ... OK
+* checking whether the namespace can be loaded with stated dependencies ... OK
+* checking whether the namespace can be unloaded cleanly ... OK
+* checking loading without being on the library search path ... OK
+* checking dependencies in R code ... OK
+* checking S3 generic/method consistency ... OK
+* checking replacement functions ... OK
+* checking foreign function calls ... OK
+* checking R code for possible problems ... OK
+* checking for missing documentation entries ... WARNING
+Undocumented code objects:
+  'aggregate_daily_to_weekly' 'bbox_to_cds_area'
+  'build_daily_climatology' 'build_era5_mintemp_requests'
+  'build_weekly_climatology' 'compress_dates_to_intervals'
+  'diagnose_spatial_domain' 'discover_netcdf_files'
+  'download_cds_requests' 'ensure_pipeline_directories'
+  'expand_config_environment' 'expected_daily_dates'
+  'extract_daily_layers' 'fill_future_daily_analogs'
+  'fill_future_weekly_analogs' 'finalize_run_manifest'
+  'find_inventory_conflicts' 'find_missing_dates'
+  'format_daily_filename' 'format_weekly_filename'
+  'identify_affected_iso_weeks' 'initialize_run_manifest'
+  'inspect_netcdf_file' 'inventory_grid_directory'
+  'normalize_downloaded_file' 'parse_grid_filename'
+  'plan_observed_update' 'process_downloaded_mintemp'
+  'read_pipeline_config' 'record_manifest_event' 'resolve_config_paths'
+  'resolve_project_root' 'run_era5_mintemp_pipeline'
+  'split_dates_by_year_month' 'standardize_daily_raster'
+  'summarize_grid_inventory' 'validate_cds_request_structure'
+  'validate_daily_output' 'validate_pipeline_config'
+  'validate_raster_against_template' 'validate_weekly_output'
+  'write_cds_request_manifests'
+All user-level objects in a package should have documentation entries.
+See chapter 'Writing R documentation files' in the 'Writing R
+Extensions' manual.
+* checking examples ... NONE
+* checking for unstated dependencies in 'tests' ... OK
+* checking tests ... OK
+  Running 'testthat.R'
+* DONE
+Status: 2 WARNINGs, 4 NOTEs

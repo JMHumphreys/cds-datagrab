@@ -1,0 +1,1 @@
+pkgs <- c("terra","sf","yaml","fs","jsonlite","digest","optparse","ISOweek"); ok <- vapply(pkgs,requireNamespace,logical(1),quietly=TRUE); print(data.frame(package=pkgs,available=ok)); if(any(!ok)) quit(status=1)
