@@ -16,4 +16,8 @@ fill_future_daily_analogs, fill_future_weekly_analogs, initialize_run_manifest,
 record_manifest_event, finalize_run_manifest, run_era5_mintemp_pipeline,
 resolve_storage_paths, template_fingerprint, validate_template_crs,
 validate_template_geometry)
+export(detect_download_format, inspect_netcdf_ncdf4, select_era5_temperature_variable,
+decode_netcdf_time, read_era5_daily_with_ncdf4, read_era5_daily_layers)
 importFrom(utils, unzip)
+importFrom(stats, median)
+importFrom(utils, tail)

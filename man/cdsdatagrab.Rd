@@ -11,6 +11,7 @@
 \alias{build_daily_climatology}\alias{build_weekly_climatology}\alias{fill_future_daily_analogs}\alias{fill_future_weekly_analogs}
 \alias{initialize_run_manifest}\alias{record_manifest_event}\alias{finalize_run_manifest}\alias{run_era5_mintemp_pipeline}
 \alias{build_pipeline_option_parser}\alias{parse_pipeline_args}\alias{resolve_execution_choice}\alias{resolve_storage_paths}\alias{template_fingerprint}\alias{validate_template_crs}\alias{validate_template_geometry}
+\alias{detect_download_format}\alias{inspect_netcdf_ncdf4}\alias{select_era5_temperature_variable}\alias{decode_netcdf_time}\alias{read_era5_daily_with_ncdf4}\alias{read_era5_daily_layers}
 \title{Configuration-driven ERA5 minimum-temperature pipeline}
 \description{Reusable functions for inventory, planning, spatial standardization, validation, aggregation, and audit manifests.}
 \keyword{internal}

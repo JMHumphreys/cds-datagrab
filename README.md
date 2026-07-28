@@ -17,3 +17,5 @@ Rscript scripts/run_pipeline.R --config config/era5_mintemp_smoke.yml --mode dow
 ```
 
 Inspect a downloaded target without modifying it with `Rscript scripts/inspect_smoke_download.R <path>`.
+
+CDS returns a valid NetCDF4/HDF5 file for the smoke request. Atlas GDAL may not open that file as a raster, so `ncdf4` is the primary raw-data reader; `terra` remains the projection, masking, validation, and GeoTIFF-writing engine. The `number` variable is ignored and `t2m` is selected explicitly. Direct NetCDF files do not need archive extraction, so `extracted/` may remain empty. Processing is resumable from the existing raw file.
