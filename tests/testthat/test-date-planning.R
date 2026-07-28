@@ -1,0 +1,1 @@
+test_that("planning finds gaps and overlap", { d<-data.frame(valid=TRUE,estimated=FALSE,date=as.Date(c("2026-01-01","2026-01-03"))); p<-plan_observed_update(d,"2026-01-01","2026-01-04",1); expect_true(as.Date("2026-01-02")%in%p$date); expect_true(as.Date("2026-01-04")%in%p$date); expect_equal(nrow(compress_dates_to_intervals(p$date)),1) })

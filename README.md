@@ -8,4 +8,12 @@ Run `Rscript scripts/run_pipeline.R --mode diagnose` or a reproducible dry plan 
 
 The Atlas job is `hpc/run_era5_mintemp.slurm`; review the dry-run request and inventory manifests before execution. Each run records request, download, processing, validation, and reconciliation information in JSON/CSV manifests. Failed runs can be resumed because existing nonempty raw targets are skipped and valid outputs are preserved.
 
-The current implementation is intentionally scoped to ERA5 minimum temperature. NetCDF metadata must contain unambiguous time information, and the supplied template currently has no CRS metadata; the pipeline reports that condition and does not silently assign one. Future variables should add a source-specific request/extraction adapter while reusing inventory, filename, planning, validation, and manifest modules.
+The original template lacked CRS metadata; the user replaced it with a correctly georeferenced Albers equal-area raster using WGS84 and kilometer coordinates (approximately 25-km cells). No coordinate scaling or CRS repair is required. The template defines both target geometry and the raster analysis mask; the GPKG defines the geographic request extent. Ordinary execution validates but never modifies either spatial file. The first real CDS execution should be the three-day smoke download, which must be inspected before any historical production update.
+
+After reviewing the smoke plan, the documented first execution is:
+
+```bash
+Rscript scripts/run_pipeline.R --config config/era5_mintemp_smoke.yml --mode download --execute
+```
+
+Inspect a downloaded target without modifying it with `Rscript scripts/inspect_smoke_download.R <path>`.

@@ -4,7 +4,31 @@ project:
 spatial:
   template_path: spatial_domain/study_area_raster.tif
   bbox_path: spatial_domain/study_bbox.gpkg
+  expected_crs:
+    projection: aea
+    latitude_of_origin: 20
+    central_meridian: -75
+    latitude_of_first_standard_parallel: 10
+    latitude_of_second_standard_parallel: 30
+    false_easting: 0
+    false_northing: 0
+    datum: WGS84
+    units: km
+  expected_resolution:
+    x: 24.99502
+    'y': 24.94366
+  expected_dimensions:
+    rows: 202
+    columns: 293
+    layers: 1
+  expected_extent:
+    xmin: -4361.41088177553
+    xmax: 2962.12966365311
+    ymin: -2202.99971555688
+    ymax: 2835.61878908363
+  geometry_tolerance: 0.001
   api_bbox_buffer_degrees: 0.25
+  mask_to_template: true
   mask_to_boundary: false
 paths:
   local_data_root: runtime

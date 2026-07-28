@@ -7,9 +7,10 @@ Author: CDS Data Grab [aut, cre]
 Maintainer: CDS Data Grab <noreply@example.org>
 Description: Inventory, plan, download, standardize, validate, aggregate, and
     estimate daily and weekly environmental rasters from the Copernicus Climate Data Store.
-License: MIT
+License: MIT + file LICENSE
 Encoding: UTF-8
 Depends: R (>= 4.1.0)
 Imports: terra, sf, yaml, fs, jsonlite, digest, ISOweek
 Suggests: testthat, ecmwfr, ncdf4, optparse, withr, devtools
 Config/testthat/edition: 3
+RoxygenNote: 7.3.2

@@ -37,6 +37,7 @@ validate_pipeline_config <- function(config) {
   if (is.character(config$temporal$observed_end) && config$temporal$observed_end == "auto") config$temporal$observed_end <- Sys.Date() - as.integer(config$temporal$source_lag_days) else config$temporal$observed_end <- as.Date(config$temporal$observed_end)
   if (anyNA(c(config$temporal$initial_start_date, config$temporal$observed_end, config$temporal$future_end_date))) stop("Invalid configured date")
   if (config$cds$variable != "2m_temperature" || config$cds$daily_statistic != "daily_minimum") stop("Configuration must use ERA5 2m_temperature daily_minimum")
+  if (!is.null(config$spatial$expected_crs) && requireNamespace("terra", quietly=TRUE)) { validate_template_crs(terra::rast(config$spatial$template_path), config$spatial$expected_crs, config$spatial$geometry_tolerance %||% 0.001); validate_template_geometry(terra::rast(config$spatial$template_path), list(rows=config$spatial$expected_dimensions$rows, columns=config$spatial$expected_dimensions$columns, layers=config$spatial$expected_dimensions$layers, resolution=config$spatial$expected_resolution, extent=config$spatial$expected_extent), config$spatial$geometry_tolerance %||% 0.001) }
   config
 }
 ensure_pipeline_directories <- function(config) { validate_pipeline_config(config); dirs <- unname(config$paths[c("raw_dir","daily_dir","weekly_dir","run_dir")]); fs::dir_create(dirs, recurse=TRUE); invisible(dirs) }
