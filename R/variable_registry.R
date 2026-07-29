@@ -30,10 +30,25 @@ resolve_netcdf_variable <- function(nc_metadata, variable_spec) {
   candidates[[1]]
 }
 
+normalize_source_units <- function(units) {
+  if (length(units) != 1L || is.na(units) || !nzchar(trimws(units))) return(NA_character_)
+  x <- trimws(as.character(units))
+  x <- chartr("⁰¹²³⁴⁵⁶⁷⁸⁹⁻", "0123456789-", x)
+  x <- gsub("[×·⋅]", " ", x)
+  x <- gsub("[[:space:]]+", " ", x)
+  x <- gsub("\\s*[/]\\s*", "/", x)
+  x <- gsub("\\s*[\\^]\\s*", "^", x)
+  x <- gsub("\\*\\*", "^", x)
+  x <- tolower(trimws(x))
+  if (x %in% c("1", "1/1", "m3/m3", "m^3/m^3", "m3 m-3", "m^3 m^-3", "m^3 m-3", "m3 m^ -3")) return("m3 m-3")
+  if (x %in% c("k", "kelvin")) return("K")
+  x
+}
+
 convert_source_units <- function(x, variable_spec, source_units=NULL) {
   if (variable_spec$id == "era5_soilmoist" && !is.null(source_units)) {
-    u <- tolower(gsub("\\s+", " ", trimws(source_units)))
-    if (!u %in% c("m3 m-3", "m^3 m^-3", "m3/m3", "1")) stop("Unsupported soil-moisture source units: ", source_units, call.=FALSE)
+    u <- normalize_source_units(source_units)
+    if (!identical(u, "m3 m-3")) stop("Unsupported soil-moisture source units: ", source_units, call.=FALSE)
   }
   if(variable_spec$unit_conversion == "kelvin_to_celsius") return(x - 273.15)
   if(variable_spec$unit_conversion == "identity") return(x)

@@ -17,6 +17,7 @@ record_manifest_event, finalize_run_manifest, run_era5_mintemp_pipeline,
 resolve_storage_paths, template_fingerprint, validate_template_crs,
 validate_template_geometry)
 export(get_variable_spec, variable_spec_hash, resolve_netcdf_variable,
+normalize_source_units,
 convert_source_units, validate_variable_values, aggregate_daily_values,
 aggregate_weekly_values, daily_output_filename, weekly_output_filename,
 build_variable_requests, process_downloaded_variable, normalize_manifest_dates,

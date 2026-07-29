@@ -1,0 +1,30 @@
+test_that("soil moisture units are normalized strictly", {
+  expect_equal(normalize_source_units("m3 m-3"), "m3 m-3")
+  expect_equal(normalize_source_units("m^3 m^-3"), "m3 m-3")
+  expect_equal(normalize_source_units("m**3 m**-3"), "m3 m-3")
+  expect_equal(normalize_source_units("m³ m⁻³"), "m3 m-3")
+  expect_equal(normalize_source_units("1"), "m3 m-3")
+  expect_error(convert_source_units(1, get_variable_spec("era5_soilmoist"), "percent"), "Unsupported")
+})
+
+test_that("manifest date frames and plural hashes remain JSON-safe", {
+  x <- list(date_source_map=data.frame(date=as.Date("2026-07-01") + 0:2, selected_raw_source=rep("raw.nc", 3), stringsAsFactors=FALSE), planned_request_hashes="e8a76a4d", active_request_hashes=character())
+  y <- normalize_manifest_dates(x)
+  expect_equal(y$date_source_map$date, c("2026-07-01", "2026-07-02", "2026-07-03"))
+  expect_equal(y$planned_request_hashes, "e8a76a4d")
+  expect_length(y$active_request_hashes, 0)
+})
+
+test_that("submission wrappers keep variable-specific labels and delegate through bash", {
+  hpc <- file.path("..", "..", "hpc")
+  skip_if_not(file.exists(file.path(hpc, "submit_era5_soilmoist.sh")), "repository shell wrappers are unavailable")
+  soil <- paste(readLines(file.path(hpc, "submit_era5_soilmoist.sh")), collapse="\n")
+  mint <- paste(readLines(file.path(hpc, "submit_era5_mintemp.sh")), collapse="\n")
+  generic <- paste(readLines(file.path(hpc, "submit_era5_variable.sh")), collapse="\n")
+  expect_match(soil, "JOB_NAME=\\\"cds_soil\\\"")
+  expect_match(soil, "cds_soilmoist_%j\\.out")
+  expect_match(soil, "config/era5_soilmoist_smoke\\.yml")
+  expect_false(grepl("submit_era5_mintemp\\.sh", soil, fixed=FALSE))
+  expect_match(mint, "JOB_NAME=\\\"cds_mint\\\"")
+  expect_match(generic, "sbatch --job-name=\\\"\\$JOB_NAME\\\" --output=\\\"\\$SLURM_OUTPUT\\\" --error=\\\"\\$SLURM_ERROR\\\"")
+})

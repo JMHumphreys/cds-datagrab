@@ -20,7 +20,7 @@ normalize_manifest_dates <- function(x) {
   x
 }
 manifest_json_safe <- normalize_manifest_dates
-write_run_manifest <- function(manifest) { jsonlite::write_json(normalize_manifest_dates(manifest),file.path(manifest$run_dir,"run_manifest.json"),pretty=TRUE,auto_unbox=TRUE,null="null"); invisible(manifest) }
+write_run_manifest <- function(manifest) { x<-normalize_manifest_dates(manifest); for(n in c("planned_request_hashes","active_request_hashes")) if(n %in% names(x)) x[[n]]<-structure(as.character(x[[n]]%||%character()),class="AsIs"); jsonlite::write_json(x,file.path(manifest$run_dir,"run_manifest.json"),pretty=TRUE,auto_unbox=TRUE,null="null"); invisible(manifest) }
 update_manifest_stage <- function(manifest, stage, status, result=list()) {
   if (is.logical(status) && length(status)==1L) status <- if(status) "success_noop" else "not_run"
   result <- result[setdiff(names(result), "status")]

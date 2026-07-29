@@ -12,6 +12,22 @@ CONFIG=config/era5_mintemp_smoke.yml MODE=full DRY_RUN=false \
 OBSERVED_END=2026-07-03 bash hpc/submit_era5_mintemp.sh
 ```
 
+For the soil-moisture smoke run, submit the variable wrapper explicitly through bash:
+
+```bash
+CDS_DATAGRAB_ROOT=/project/disease_ecology/cds-datagrab-soilmoist-smoke-output \
+CONFIG=config/era5_soilmoist_smoke.yml MODE=full DRY_RUN=false \
+OBSERVED_END=2026-07-03 bash hpc/submit_era5_soilmoist.sh
+```
+
+If Atlas reports a local mode-only change to the mintemp wrapper, confirm it with
+`git diff --summary` before restoring it. Only for a mode-only difference, use:
+
+```bash
+git restore hpc/submit_era5_mintemp.sh
+git pull
+```
+
 Credentials are read by R through `ecmwfr_PAT`; the token is never printed. The root marker `.cds-datagrab-root` identifies the storage root and is required for destructive operations.
 ### Northern-edge recovery
 
