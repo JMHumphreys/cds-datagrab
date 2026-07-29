@@ -24,7 +24,9 @@ aggregate_weekly_values, daily_output_filename, weekly_output_filename,
 build_variable_requests, process_downloaded_variable, normalize_manifest_dates,
 weekly_input_fingerprint)
 export(detect_download_format, inspect_netcdf_ncdf4, select_era5_temperature_variable,
-decode_netcdf_time, read_era5_daily_with_ncdf4, read_era5_daily_layers)
+ decode_netcdf_time, read_era5_daily_with_ncdf4, read_era5_daily_layers,
+ read_daily_netcdf, build_request_dates, request_entry_for_raw,
+ selected_dates_for_raw, validate_date_source_map, normalize_path_key)
 importFrom(utils, unzip)
 importFrom(stats, median)
 importFrom(utils, tail)
