@@ -12,14 +12,15 @@ initialize_run_manifest <- function(config, mode, dry_run = TRUE, execution_sour
   m <- list(run_id=id, run_dir=p$run_dir, mode=mode, dry_run=as.logical(dry_run), execution_flag_source=execution_source, storage_paths=p, start_time=as.character(Sys.time()), start_utc=as.character(Sys.time()), pipeline_status="running", current_stage="initialization", failed_stage=NA_character_, failure_class=NA_character_, failure_message=NA_character_, completed_stages=character(), pending_stages=c("plan","download","process","aggregate","estimate","final_validation"), stage_results=list())
   write_run_manifest(m); m
 }
-manifest_json_safe <- function(x) {
+normalize_manifest_dates <- function(x) {
   if (inherits(x, "Date")) return(format(x, "%Y-%m-%d"))
   if (inherits(x, c("POSIXct", "POSIXlt"))) return(format(x, "%Y-%m-%dT%H:%M:%SZ", tz="UTC"))
   if (is.data.frame(x)) return(lapply(x, manifest_json_safe))
   if (is.list(x)) { y <- lapply(x, manifest_json_safe); names(y) <- names(x); return(y) }
   x
 }
-write_run_manifest <- function(manifest) { jsonlite::write_json(manifest_json_safe(manifest),file.path(manifest$run_dir,"run_manifest.json"),pretty=TRUE,auto_unbox=TRUE,null="null"); invisible(manifest) }
+manifest_json_safe <- normalize_manifest_dates
+write_run_manifest <- function(manifest) { jsonlite::write_json(normalize_manifest_dates(manifest),file.path(manifest$run_dir,"run_manifest.json"),pretty=TRUE,auto_unbox=TRUE,null="null"); invisible(manifest) }
 update_manifest_stage <- function(manifest, stage, status, result=list()) {
   if (is.logical(status) && length(status)==1L) status <- if(status) "success_noop" else "not_run"
   result <- result[setdiff(names(result), "status")]

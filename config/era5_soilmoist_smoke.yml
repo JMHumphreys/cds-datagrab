@@ -1,0 +1,26 @@
+project:
+  dataset_id: era5_soilmoist
+  profile: smoke
+  output_prefix: soilmoist
+spatial:
+  template_path: spatial_domain/study_area_raster.tif
+  bbox_path: spatial_domain/study_bbox.gpkg
+  expected_crs: {projection: aea, latitude_of_origin: 20, central_meridian: -75, latitude_of_first_standard_parallel: 10, latitude_of_second_standard_parallel: 30, false_easting: 0, false_northing: 0, datum: WGS84, units: km}
+  expected_resolution: {x: 24.99502, 'y': 24.94366}
+  expected_dimensions: {rows: 202, columns: 293, layers: 1}
+  expected_extent: {xmin: -4361.41088177553, xmax: 2962.12966365311, ymin: -2202.99971555688, ymax: 2835.61878908363}
+  geometry_tolerance: 0.001
+  request_extent_source: template_bbox_union
+  api_bbox_buffer_degrees: 1.0
+  source_grid_degrees: 0.25
+  align_request_to_source_grid: true
+  mask_to_template: true
+  require_complete_template_coverage: true
+  write_coverage_diagnostics: true
+paths: {root: null}
+temporal: {initial_start_date: '2026-07-01', observed_end: '2026-07-03', source_lag_days: 0, overlap_days: 0, future_end_date: '2026-07-03'}
+cds: {dataset_short_name: derived-era5-single-levels-daily-statistics, product_type: reanalysis, variable: volumetric_soil_water_layer_1, daily_statistic: daily_mean, time_zone: utc+00:00, frequency: 6_hourly, data_format: netcdf, download_format: unarchived, request_chunk: month, request_timeout_seconds: 7200, polling_seconds: 30, batch_workers: 1}
+processing: {source_units: m3 m-3, output_units: m3 m-3, unit_conversion: identity, resampling_method: bilinear, longitude_handling: auto, overwrite_observed_overlap: true, delete_replaced_estimates: true, invalid_output_action: quarantine, datatype: FLT4S, compression: DEFLATE, gdal_predictor: 3, tiled: true, naflag: -9999}
+weekly: {aggregation: mean, require_complete_week: true, expected_days: 7}
+future: {daily_enabled: false, weekly_enabled: false, use_observed_donors_only: true, week53_method: adjacent_weeks_mean, overwrite_estimates: true}
+validation: {minimum: 0, maximum: 1, minimum_celsius: 0, maximum_celsius: 1, hard_tolerance: 0.000001, soft_warning_minimum: 0.01, soft_warning_maximum: 0.80, require_exact_template_geometry: true, fail_on_duplicate_observed_dates: true, fail_on_unparsed_observed_names: false}

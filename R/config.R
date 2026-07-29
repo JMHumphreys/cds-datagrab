@@ -94,12 +94,13 @@ validate_pipeline_config <- function(config) {
   if (!is.null(config$project$profile) && !config$project$profile %in% c("smoke", "production")) stop("project.profile must be smoke or production")
   if (!file.exists(config$spatial$template_path)) stop("Template raster is missing: ", config$spatial$template_path)
   if (!file.exists(config$spatial$bbox_path)) stop("Bounding-box file is missing: ", config$spatial$bbox_path)
-  if (config$weekly$aggregation != "min") stop("Only weekly aggregation='min' is supported")
+  if (!config$weekly$aggregation %in% c("min","mean")) stop("weekly.aggregation must be 'min' or 'mean'")
   config$temporal$initial_start_date <- as.Date(config$temporal$initial_start_date)
   config$temporal$future_end_date <- as.Date(config$temporal$future_end_date)
   if (is.character(config$temporal$observed_end) && config$temporal$observed_end == "auto") config$temporal$observed_end <- Sys.Date() - as.integer(config$temporal$source_lag_days) else config$temporal$observed_end <- as.Date(config$temporal$observed_end)
   if (anyNA(c(config$temporal$initial_start_date, config$temporal$observed_end, config$temporal$future_end_date))) stop("Invalid configured date")
-  if (config$cds$variable != "2m_temperature" || config$cds$daily_statistic != "daily_minimum") stop("Configuration must use ERA5 2m_temperature daily_minimum")
+  spec <- get_variable_spec(config$project$dataset_id, config)
+  if (config$cds$variable != spec$cds_variable || config$cds$daily_statistic != spec$daily_statistic) stop("Configuration does not match variable specification")
   if (!is.null(config$spatial$expected_crs) && requireNamespace("terra", quietly = TRUE)) { validate_template_crs(terra::rast(config$spatial$template_path), config$spatial$expected_crs, config$spatial$geometry_tolerance %||% 0.001); validate_template_geometry(terra::rast(config$spatial$template_path), list(rows=config$spatial$expected_dimensions$rows, columns=config$spatial$expected_dimensions$columns, layers=config$spatial$expected_dimensions$layers, resolution=config$spatial$expected_resolution, extent=config$spatial$expected_extent), config$spatial$geometry_tolerance %||% 0.001) }
   config
 }

@@ -46,6 +46,12 @@ Found the following hidden files and directories:
   tests/testthat/runtime/test-storage-1785280975/.cds-datagrab-root
   tests/testthat/runtime/test-storage-1785281197/.cds-datagrab-root
   tests/testthat/runtime/test-storage-1785281270/.cds-datagrab-root
+  tests/testthat/runtime/test-storage-1785295628/.cds-datagrab-root
+  tests/testthat/runtime/test-storage-1785295658/.cds-datagrab-root
+  tests/testthat/runtime/test-storage-1785295714/.cds-datagrab-root
+  tests/testthat/runtime/test-storage-1785295812/.cds-datagrab-root
+  tests/testthat/runtime/test-storage-1785295927/.cds-datagrab-root
+  tests/testthat/runtime/test-storage-1785295995/.cds-datagrab-root
   ..Rcheck
   .Rproj.user
   .git
@@ -53,9 +59,9 @@ These were most likely included in error. See section 'Package
 structure' in the 'Writing R Extensions' manual.
 * checking for portable file names ... ERROR
 Found the following non-portable file paths:
-  cdsdatagrab/.git/refs/codex/turn-diffs/captures/1785280671805/76575e37-f532-4f81-bc9b-bc8b0e92ca09/base
+  cdsdatagrab/.git/refs/codex/turn-diffs/captures/1785294926164/e7f42130-fd25-423a-9c92-49298664214c/base
   cdsdatagrab/.git/refs/codex/turn-diffs/checkpoints/593663689091fe6953067b8981cb47153c97caa4c6fd246428f0e9fae86d9e1e/0e69720f18f52fe82441579772651124b70669e8fe123821e48e43b0592a1f64/1785211455849/641bbc51-268c-43f6-98f4-def791ee5733
-  cdsdatagrab/.git/refs/codex/turn-diffs/checkpoints/eb2ff5a577c375f8e47c21d2f11e333e5f3866a096a391980a4986fe4f6d2d48/9faad072ed260597c971be3e92c51e10ff79cb96c76f52679fff950b2ae4ca65/1785280657469/ae403c60-acdf-4a33-b469-188c1eb84592
+  cdsdatagrab/.git/refs/codex/turn-diffs/checkpoints/eb2ff5a577c375f8e47c21d2f11e333e5f3866a096a391980a4986fe4f6d2d48/f4001af4673020d486b169635eb1c835c51c3ba672976a75b7f61f46d6563f58/1785281467418/f4efff04-eb7e-4719-b85c-96c92596e759
   cdsdatagrab/runtime/cds-datagrab/runs/production/era5_mintemp/diagnose_20260728T014014Z/spatial_diagnostics.json
   cdsdatagrab/runtime/cds-datagrab/runs/production/era5_mintemp/diagnose_20260728T040100Z/spatial_diagnostics.json
   cdsdatagrab/runtime/cds-datagrab/runs/production/era5_mintemp/diagnose_20260728T145245Z/spatial_diagnostics.json
@@ -115,8 +121,14 @@ Found the following non-portable file paths:
   cdsdatagrab/tests/testthat/runtime/cds-datagrab/runs/smoke/era5_mintemp/20260728T232252Z_1f1f0bd3/run_manifest.json
   cdsdatagrab/tests/testthat/runtime/cds-datagrab/runs/smoke/era5_mintemp/20260728T232633Z_1f1f0bd3/run_manifest.json
   cdsdatagrab/tests/testthat/runtime/cds-datagrab/runs/smoke/era5_mintemp/20260728T232747Z_1f1f0bd3/run_manifest.json
+  cdsdatagrab/tests/testthat/runtime/cds-datagrab/runs/smoke/era5_mintemp/20260729T032706Z_1f1f0bd3/run_manifest.json
+  cdsdatagrab/tests/testthat/runtime/cds-datagrab/runs/smoke/era5_mintemp/20260729T032735Z_1f1f0bd3/run_manifest.json
+  cdsdatagrab/tests/testthat/runtime/cds-datagrab/runs/smoke/era5_mintemp/20260729T032831Z_1f1f0bd3/run_manifest.json
+  cdsdatagrab/tests/testthat/runtime/cds-datagrab/runs/smoke/era5_mintemp/20260729T033009Z_1f1f0bd3/run_manifest.json
+  cdsdatagrab/tests/testthat/runtime/cds-datagrab/runs/smoke/era5_mintemp/20260729T033204Z_1f1f0bd3/run_manifest.json
+  cdsdatagrab/tests/testthat/runtime/cds-datagrab/runs/smoke/era5_mintemp/20260729T033312Z_1f1f0bd3/run_manifest.json
   cdsdatagrab/.git/refs/codex/turn-diffs/checkpoints/593663689091fe6953067b8981cb47153c97caa4c6fd246428f0e9fae86d9e1e/0e69720f18f52fe82441579772651124b70669e8fe123821e48e43b0592a1f64/1785211455849
-  cdsdatagrab/.git/refs/codex/turn-diffs/checkpoints/eb2ff5a577c375f8e47c21d2f11e333e5f3866a096a391980a4986fe4f6d2d48/9faad072ed260597c971be3e92c51e10ff79cb96c76f52679fff950b2ae4ca65/1785280657469
+  cdsdatagrab/.git/refs/codex/turn-diffs/checkpoints/eb2ff5a577c375f8e47c21d2f11e333e5f3866a096a391980a4986fe4f6d2d48/f4001af4673020d486b169635eb1c835c51c3ba672976a75b7f61f46d6563f58/1785281467418
 
 Tarballs are only required to store paths of up to 100 bytes and cannot
 store those of more than 256 bytes, with restrictions including to 100
@@ -151,7 +163,18 @@ Most likely, these were included erroneously.
 * checking Rd files ... OK
 * checking Rd metadata ... OK
 * checking Rd cross-references ... OK
-* checking for missing documentation entries ... OK
+* checking for missing documentation entries ... WARNING
+Undocumented code objects:
+  'aggregate_daily_values' 'aggregate_weekly_values'
+  'build_variable_requests' 'convert_source_units'
+  'daily_output_filename' 'get_variable_spec'
+  'normalize_manifest_dates' 'process_downloaded_variable'
+  'resolve_netcdf_variable' 'validate_variable_values'
+  'variable_spec_hash' 'weekly_input_fingerprint'
+  'weekly_output_filename'
+All user-level objects in a package should have documentation entries.
+See chapter 'Writing R documentation files' in the 'Writing R
+Extensions' manual.
 * checking for code/documentation mismatches ... OK
 * checking Rd \usage sections ... OK
 * checking Rd contents ... OK
@@ -162,20 +185,20 @@ Most likely, these were included erroneously.
   Running 'testthat.R'
 Running the tests in 'tests/testthat.R' failed.
 Last 13 lines of output:
-  ══ Skipped tests (4) ═══════════════════════════════════════════════════════════
-  • file.exists(file.path("spatial_domain", "study_area_raster.tif")) is not TRUE
     (2): 'test-spatial-domain.R:2:56', 'test-spatial-domain.R:3:47'
+  • production config is not included in installed package checks (1):
+    'test-production-readiness.R:3:3'
   • {optparse} is not installed (2): 'test-cli.R:1:63', 'test-cli.R:2:54'
   
   ══ Failed tests ════════════════════════════════════════════════════════════════
-  ── Error ('test-production-readiness.R:2:3'): production configuration and endpoint counts are fixed ──
-  Error in `read_pipeline_config(file.path("..", "..", "config", "era5_mintemp_production.yml"))`: Configuration does not exist: ../../config/era5_mintemp_production.yml
+  ── Error ('test-soilmoist-netcdf.R:13:3'): soil moisture configurations preserve endpoint semantics ──
+  Error in `read_pipeline_config(file.path("..", "..", "config", "era5_soilmoist_smoke.yml"))`: Configuration does not exist: ../../config/era5_soilmoist_smoke.yml
   Backtrace:
       ▆
-   1. └─cdsdatagrab::read_pipeline_config(...) at test-production-readiness.R:2:3
+   1. └─cdsdatagrab::read_pipeline_config(...) at test-soilmoist-netcdf.R:13:3
   
-  [ FAIL 1 | WARN 0 | SKIP 4 | PASS 143 ]
+  [ FAIL 1 | WARN 0 | SKIP 5 | PASS 178 ]
   Error: Test failures
   Execution halted
 * DONE
-Status: 2 ERRORs, 1 WARNING, 2 NOTEs
+Status: 2 ERRORs, 2 WARNINGs, 2 NOTEs

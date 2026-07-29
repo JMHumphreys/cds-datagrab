@@ -16,20 +16,22 @@ Type 'demo()' for some demos, 'help()' for on-line help, or
 Type 'q()' to quit R.
 
 > library(testthat); library(cdsdatagrab); test_check("cdsdatagrab")
-[ FAIL 1 | WARN 0 | SKIP 4 | PASS 143 ]
+[ FAIL 1 | WARN 0 | SKIP 5 | PASS 178 ]
 
-══ Skipped tests (4) ═══════════════════════════════════════════════════════════
+══ Skipped tests (5) ═══════════════════════════════════════════════════════════
 • file.exists(file.path("spatial_domain", "study_area_raster.tif")) is not TRUE
   (2): 'test-spatial-domain.R:2:56', 'test-spatial-domain.R:3:47'
+• production config is not included in installed package checks (1):
+  'test-production-readiness.R:3:3'
 • {optparse} is not installed (2): 'test-cli.R:1:63', 'test-cli.R:2:54'
 
 ══ Failed tests ════════════════════════════════════════════════════════════════
-── Error ('test-production-readiness.R:2:3'): production configuration and endpoint counts are fixed ──
-Error in `read_pipeline_config(file.path("..", "..", "config", "era5_mintemp_production.yml"))`: Configuration does not exist: ../../config/era5_mintemp_production.yml
+── Error ('test-soilmoist-netcdf.R:13:3'): soil moisture configurations preserve endpoint semantics ──
+Error in `read_pipeline_config(file.path("..", "..", "config", "era5_soilmoist_smoke.yml"))`: Configuration does not exist: ../../config/era5_soilmoist_smoke.yml
 Backtrace:
     ▆
- 1. └─cdsdatagrab::read_pipeline_config(...) at test-production-readiness.R:2:3
+ 1. └─cdsdatagrab::read_pipeline_config(...) at test-soilmoist-netcdf.R:13:3
 
-[ FAIL 1 | WARN 0 | SKIP 4 | PASS 143 ]
+[ FAIL 1 | WARN 0 | SKIP 5 | PASS 178 ]
 Error: Test failures
 Execution halted

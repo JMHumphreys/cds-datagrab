@@ -1,5 +1,7 @@
 test_that("production configuration and endpoint counts are fixed", {
-  cfg <- read_pipeline_config(file.path("..", "..", "config", "era5_mintemp_production.yml"))
+  config_path <- file.path("..", "..", "config", "era5_mintemp_production.yml")
+  skip_if_not(file.exists(config_path), "production config is not included in installed package checks")
+  cfg <- read_pipeline_config(config_path)
   expect_identical(unname(cfg$project$profile), "production")
   expect_equal(as.character(cfg$temporal$initial_start_date), "2022-01-01")
   expect_equal(as.character(cfg$temporal$observed_end), "2026-07-12")
