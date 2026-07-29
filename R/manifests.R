@@ -15,7 +15,7 @@ initialize_run_manifest <- function(config, mode, dry_run = TRUE, execution_sour
 normalize_manifest_dates <- function(x) {
   if (inherits(x, "Date")) return(format(x, "%Y-%m-%d"))
   if (inherits(x, c("POSIXct", "POSIXlt"))) return(format(x, "%Y-%m-%dT%H:%M:%SZ", tz="UTC"))
-  if (is.data.frame(x)) return(lapply(x, manifest_json_safe))
+  if (is.data.frame(x)) { y<-lapply(x, manifest_json_safe); if("date"%in%names(y)) y$date<-format(normalize_date_vector(x$date,"date_source_map$date"),"%Y-%m-%d"); return(y) }
   if (is.list(x)) { y <- lapply(x, manifest_json_safe); names(y) <- names(x); return(y) }
   x
 }

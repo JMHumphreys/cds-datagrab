@@ -7,5 +7,5 @@ select_active_raw_inputs <- function(request_records, download_results=NULL, raw
 
 map_dates_to_active_raw_sources <- function(raw_inputs, request_records) {
   rows <- list(); for(req in request_records) { if(!req$target %in% basename(raw_inputs)) next; p <- raw_inputs[basename(raw_inputs)==req$target][1]; ds <- as.Date(sprintf("%s-%s-%s",req$year,req$month,req$day)); for(d in ds) rows[[length(rows)+1L]] <- data.frame(date=d,selected_raw_source=p,request_hash=req$request_hash %||% NA_character_,excluded_sources="",selection_reason="exact_active_request_hash",stringsAsFactors=FALSE) }
-  if(!length(rows)) return(data.frame(date=as.Date(character()),selected_raw_source=character(),request_hash=character(),excluded_sources=character(),selection_reason=character(),stringsAsFactors=FALSE)); out <- do.call(rbind,rows); if(anyDuplicated(out$date)) stop("Multiple active raw sources provide the same date",call.=FALSE); out
+  if(!length(rows)) return(data.frame(date=as.Date(character()),selected_raw_source=character(),request_hash=character(),excluded_sources=character(),selection_reason=character(),stringsAsFactors=FALSE)); out <- do.call(rbind,rows); out$date <- normalize_date_vector(out$date,"date_source_map$date"); if(anyDuplicated(out$date)) stop("Multiple active raw sources provide the same date",call.=FALSE); out
 }
