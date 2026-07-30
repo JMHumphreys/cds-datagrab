@@ -22,7 +22,12 @@ validate_source_values, normalize_output_values,
 convert_source_units, validate_variable_values, aggregate_daily_values,
 aggregate_weekly_values, daily_output_filename, weekly_output_filename,
 build_variable_requests, process_downloaded_variable, normalize_manifest_dates,
-weekly_input_fingerprint)
+ weekly_input_fingerprint)
+export(run_environmental_pipeline, request_adapter_for_spec, request_api_fields,
+       build_cds_api_payload, validate_cds_api_payload, is_transient_cds_error,
+       with_cds_retry, cds_retry_delay, align_extent_to_source_grid,
+       inspect_netcdf_ncdf4, select_era5_temperature_variable,
+       read_daily_netcdf, decode_netcdf_time)
 export(detect_download_format, inspect_netcdf_ncdf4, select_era5_temperature_variable,
  decode_netcdf_time, read_era5_daily_with_ncdf4, read_era5_daily_layers,
  read_daily_netcdf, build_request_dates, request_entry_for_raw,

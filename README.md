@@ -4,7 +4,7 @@
 
 Observed files use `mintemp_YYYY-MM-DD.tif` and `mintemp_YYYY-Www.tif`; future climatological analogs use `_est`. Estimated files are excluded from observed coverage, weekly aggregation, and climatological donors. The weekly output requires all seven Monday-through-Sunday observed days.
 
-Run `Rscript scripts/run_pipeline.R --mode diagnose` or a reproducible dry plan with `--mode plan --observed-end 2026-07-20`. Local output defaults to `runtime/cds-datagrab`; Atlas output defaults to `/project/disease_ecology/cds-datagrab` through `CDS_DATAGRAB_ROOT`. CLI precedence is `--output-root`, `CDS_DATAGRAB_ROOT`, configuration `paths.root`, then the local default. `--dry-run` and `--execute` are presence-only flags; neither flag means safe dry-run. Credentials are handled by `ecmwfr`; set `ecmwfr_PAT` securely after accepting applicable CDS dataset terms, and never put tokens in YAML or manifests.
+Run `Rscript scripts/run_pipeline.R --mode diagnose` or a reproducible dry plan with `--mode plan --observed-end 2026-07-20`. Atlas wrappers require an external, variable-specific `CDS_DATAGRAB_ROOT`, such as `/project/disease_ecology/cds-datagrab-lai-low-smoke-output`; the repository checkout is never a generated-data root. CLI precedence is `--output-root`, `CDS_DATAGRAB_ROOT`, configuration `paths.root`, then the local default. `--dry-run` and `--execute` are presence-only flags; neither flag means safe dry-run. Credentials are handled by `ecmwfr`; set `ecmwfr_PAT` securely after accepting applicable CDS dataset terms, and never put tokens in YAML or manifests.
 
 The official Atlas entry point is `hpc/submit_era5_mintemp.sh`, which places SLURM logs under the dedicated root. Each profile has isolated `data/<profile>/era5_mintemp/{raw,extracted,daily,weekly,temp,cache}`, `runs/<profile>/era5_mintemp/<run_id>`, and pipeline-log directories. Each root has a `.cds-datagrab-root` ownership marker; destructive operations must validate it. Failed runs can be resumed because existing nonempty raw targets are skipped and valid outputs are preserved.
 
@@ -26,3 +26,18 @@ The raster template is the authoritative output domain. The CDS request area is 
 Standardization performs one `terra::project(..., method = "bilinear")` operation followed by the template mask. Complete cellwise template coverage is mandatory; a second `resample()` or extrapolation cannot recover values absent from the source extent. Existing incomplete daily products are invalid observations and are planned for re-request and quarantined during execution. The request-area definition is included in the deterministic raw filename hash, so changing the area creates a new raw target while preserving the old file.
 
 Download targets in request manifests are filenames only. They resolve to absolute paths under the active profile's `raw/` directory and are downloaded through an atomic `.partial` target. A request is successful only after the resulting file exists, is nonempty, has a supported signature, and— for NetCDF—has readable ERA5 temperature and time metadata. Download failures stop the pipeline at `download`; processing is not attempted. Run manifests are written at initialization and updated through failures. Runtime logs are written below the configured output root, never to a repository-relative `logs/` directory. Spatial diagnostics record MD5 and SHA256 separately.
+
+## Additional direct environmental products
+
+`era5_lai_low` is direct ERA5 low-vegetation LAI (`lai_lv`), sampled at 00:00 UTC. It is a monthly climatology with seasonal variation but no interannual variability; it is not a weighted total LAI product.
+
+`agera5_relhum_min` is the AgERA5 precomputed derived 24-hour minimum relative humidity. It uses local-time daily periods on the 0.1-degree downscaled and bias-adjusted source grid. Relative humidity is not derived locally from temperature and dewpoint, and weekly RH is the mean of the seven daily minima.
+
+Atlas smoke plans use separate generated-data roots:
+
+```bash
+CDS_DATAGRAB_ROOT=/project/disease_ecology/cds-datagrab-lai-low-smoke-output CONFIG=config/era5_lai_low_smoke.yml MODE=plan DRY_RUN=true bash hpc/submit_era5_lai_low.sh
+CDS_DATAGRAB_ROOT=/project/disease_ecology/cds-datagrab-relhum-min-smoke-output CONFIG=config/agera5_relhum_min_smoke.yml MODE=plan DRY_RUN=true bash hpc/submit_agera5_relhum_min.sh
+```
+
+Use `/project/disease_ecology/cds-datagrab-lai-low-weekly-smoke-output` and `/project/disease_ecology/cds-datagrab-relhum-min-weekly-smoke-output` for weekly smoke output, and `/project/disease_ecology/cds-datagrab-lai-low-production-output` and `/project/disease_ecology/cds-datagrab-relhum-min-production-output` for persistent production output.

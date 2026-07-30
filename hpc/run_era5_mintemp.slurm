@@ -15,7 +15,7 @@ MODE="${MODE:-plan}"
 DRY_RUN="${DRY_RUN:-true}"
 OBSERVED_END="${OBSERVED_END:-auto}"
 FUTURE_END="${FUTURE_END:-}"
-CDS_DATAGRAB_ROOT="${CDS_DATAGRAB_ROOT:-/project/disease_ecology/cds-datagrab}"
+CDS_DATAGRAB_ROOT="${CDS_DATAGRAB_ROOT:?CDS_DATAGRAB_ROOT must be explicitly set to an external output root}"
 export CDS_DATAGRAB_ROOT
 case "${DRY_RUN,,}" in
   true|1|yes) EXECUTION_FLAG="--dry-run" ;;

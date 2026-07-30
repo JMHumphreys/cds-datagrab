@@ -1,0 +1,12 @@
+project: {dataset_id: agera5_relhum_min, profile: smoke, output_prefix: relhum_min, model_alias: relhum}
+spatial: {template_path: spatial_domain/study_area_raster.tif, bbox_path: spatial_domain/study_bbox.gpkg, request_extent_source: template_bbox_union, api_bbox_buffer_degrees: 1.0, source_grid_degrees: 0.1, align_request_to_source_grid: true, mask_to_template: true, require_complete_template_coverage: true}
+paths: {root: null}
+temporal: {initial_start_date: '2025-06-02', observed_end: '2025-06-08', source_lag_days: 0, future_end_date: '2025-06-08', overlap_days: 0}
+cds: {dataset_short_name: sis-agrometeorological-indicators, variable: 2m_relative_humidity_derived, daily_statistic: 24_hour_minimum, format: netcdf, request_chunk: month}
+processing: {source_units: percent, output_units: percent, unit_conversion: identity, resampling_method: bilinear, overwrite_observed_overlap: true, datatype: FLT4S, naflag: -9999}
+weekly: {aggregation: mean, require_complete_week: true, expected_days: 7}
+future: {daily_enabled: false, weekly_enabled: false}
+validation: {minimum: 0, maximum: 100, physical_minimum_percent: 0, physical_maximum_percent: 100, clamp_tolerance_percent: 0.5, hard_tolerance: 0.000001, require_exact_template_geometry: true}
+source_family: AgERA5
+daily_time_basis: local_time
+spatial_processing: AgERA5_downscaled_bias_adjusted

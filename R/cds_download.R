@@ -8,10 +8,10 @@ resolve_download_target <- function(request, paths) {
   target
 }
 
-perform_cds_transfer <- function(dataset_short_name, request, target_path) {
-  validate_cds_api_payload(request)
-  ecmwfr::wf_request(request=c(list(dataset_short_name=dataset_short_name),request), transfer=TRUE, path=dirname(target_path))
-}
+perform_cds_transfer <- function(dataset_short_name, request, target_path) { validate_cds_api_payload(request); with_cds_retry(function() ecmwfr::wf_request(request=c(list(dataset_short_name=dataset_short_name),request), transfer=TRUE, path=dirname(target_path)), list(maximum_attempts=6, initial_delay_seconds=30, multiplier=2, maximum_delay_seconds=600, jitter_fraction=.20, honor_retry_after=TRUE)) }
+is_transient_cds_error <- function(e) { m<-conditionMessage(e); grepl("HTTP[ :]?(429|500|502|503|504)|connection[[:space:]_-]*(reset|timeout)|timed[[:space:]]*out|temporary DNS|could not resolve host",m,ignore.case=TRUE) }
+cds_retry_delay <- function(attempt, config=list(), retry_after=NULL) { if(isTRUE(config$honor_retry_after)&&is.finite(as.numeric(retry_after)))return(as.numeric(retry_after)); min(as.numeric(config$maximum_delay_seconds%||%600),as.numeric(config$initial_delay_seconds%||%30)*(as.numeric(config$multiplier%||%2)^(attempt-1))) }
+with_cds_retry <- function(fun, config=list(), sleep=Sys.sleep) { max_attempts<-as.integer(config$maximum_attempts%||%6); for(attempt in seq_len(max_attempts)){ans<-tryCatch(list(ok=TRUE,value=fun()),error=function(e)list(ok=FALSE,error=e));if(ans$ok)return(ans$value);if(attempt>=max_attempts||!is_transient_cds_error(ans$error))stop(ans$error);delay<-cds_retry_delay(attempt,config);j<-as.numeric(config$jitter_fraction%||%0.2);if(j>0)delay<-delay*runif(1,1-j,1+j);sleep(delay)};stop("CDS retry loop exhausted",call.=FALSE) }
 format_cds_error <- function(e) {
   msg <- conditionMessage(e); status <- if(grepl("HTTP[ :]?400|status[^0-9]*400",msg,ignore.case=TRUE)) 400L else NA_integer_; detail <- trimws(gsub("[[:space:]]+"," ",msg)); if(is.finite(status)) paste0("CDS request rejected with HTTP ",status,": ",detail) else detail
 }

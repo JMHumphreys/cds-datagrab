@@ -1,0 +1,1 @@
+run_environmental_pipeline <- run_era5_mintemp_pipeline

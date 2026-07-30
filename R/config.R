@@ -37,12 +37,13 @@ read_pipeline_config <- function(path) {
   r <- normalizePath(root, winslash = "/", mustWork = FALSE)
   identical(tolower(p), tolower(r)) || startsWith(tolower(p), paste0(tolower(r), "/"))
 }
-.reject_root <- function(root, project_root) {
+.reject_root <- function(root, project_root, explicit = TRUE) {
   if (!nzchar(root) || root %in% c("/", "\\")) stop("Output root is invalid", call. = FALSE)
   home <- normalizePath(path.expand("~"), winslash = "/", mustWork = FALSE)
   old <- "/project/disease_ecology/NWScrewworm"
   if (identical(tolower(root), tolower(home))) stop("User home directory cannot be the output root", call. = FALSE)
   if (identical(tolower(root), tolower(normalizePath(project_root, winslash = "/", mustWork = TRUE)))) stop("Repository root cannot be the output root", call. = FALSE)
+  if (isTRUE(explicit) && .descendant(root, project_root)) stop("CDS_DATAGRAB_ROOT must be outside the repository checkout", call. = FALSE)
   if (grepl("NWScrewworm", root, ignore.case=TRUE) || identical(tolower(root), tolower(old)) || startsWith(tolower(root), paste0(tolower(old), "/"))) stop("The old NWScrewworm data root is not permitted", call. = FALSE)
 }
 
@@ -55,8 +56,10 @@ resolve_storage_paths <- function(config, project_root, output_root = NULL, crea
   if (nzchar(obsolete)) warning("CDS_DATAGRAB_DATA_ROOT is obsolete and is ignored.\nSet CDS_DATAGRAB_ROOT instead.", call. = FALSE)
   configured <- config$paths$root %||% ""
   env_root <- Sys.getenv("CDS_DATAGRAB_ROOT", "")
+  explicit_root <- (!is.null(output_root) && nzchar(output_root)) || nzchar(env_root) || nzchar(configured)
   chosen <- if (!is.null(output_root) && nzchar(output_root)) output_root else if (nzchar(env_root)) env_root else if (nzchar(configured)) configured else file.path("runtime", "cds-datagrab")
-  root <- .normal_path(chosen, project_root); .reject_root(root, project_root)
+  root <- .normal_path(chosen, project_root); .reject_root(root, project_root, explicit_root)
+  if (isTRUE(explicit_root) && file.exists(file.path(root, ".cds-datagrab-root"))) { marker <- tryCatch(jsonlite::read_json(file.path(root, ".cds-datagrab-root"), simplifyVector=TRUE), error=function(e)NULL); marker_dataset <- if (!is.null(marker)) as.character(marker$dataset_id %||% "") else ""; if (nzchar(marker_dataset) && !identical(marker_dataset, dataset)) stop("CDS_DATAGRAB_ROOT already belongs to variable '", marker_dataset, "'; use a variable-specific output root", call.=FALSE) }
   dataset_root <- file.path(root, "data", profile, dataset)
   run_root <- file.path(root, "runs", profile, dataset)
   p <- list(root = root, profile = profile, dataset_id = dataset, dataset_root = dataset_root,
@@ -71,7 +74,7 @@ resolve_storage_paths <- function(config, project_root, output_root = NULL, crea
   all_paths <- unname(unlist(p[path_names], use.names = FALSE)); if (any(!vapply(all_paths, .descendant, logical(1), root = root))) stop("Resolved path escaped output root", call. = FALSE)
   if (create) {
     fs::dir_create(root, recurse = TRUE)
-    if (file.exists(p$root_marker)) { marker <- tryCatch(jsonlite::read_json(p$root_marker, simplifyVector=TRUE), error=function(e)NULL); if (is.null(marker) || !identical(marker$application, "cds-datagrab")) stop("Existing storage root marker is not owned by cds-datagrab", call.=FALSE) } else jsonlite::write_json(list(application = "cds-datagrab", schema_version = 1L, created_utc = format(Sys.time(), tz = "UTC"), created_by = Sys.info()[["user"]]), p$root_marker, auto_unbox = TRUE, pretty = TRUE)
+    if (file.exists(p$root_marker)) { marker <- tryCatch(jsonlite::read_json(p$root_marker, simplifyVector=TRUE), error=function(e)NULL); if (is.null(marker) || !identical(marker$application, "cds-datagrab")) stop("Existing storage root marker is not owned by cds-datagrab", call.=FALSE); marker_dataset <- as.character(marker$dataset_id %||% ""); if (nzchar(marker_dataset) && !identical(marker_dataset, dataset)) stop("CDS_DATAGRAB_ROOT already belongs to variable '", marker_dataset, "'; use a variable-specific output root", call.=FALSE) } else jsonlite::write_json(list(application = "cds-datagrab", schema_version = 2L, dataset_id = dataset, created_utc = format(Sys.time(), tz = "UTC"), created_by = Sys.info()[["user"]]), p$root_marker, auto_unbox = TRUE, pretty = TRUE)
     fs::dir_create(unname(unlist(p[c("raw_dir", "raw_quarantine_dir", "quarantine_dir", "extracted_dir", "daily_dir", "weekly_dir", "temp_dir", "cache_dir", "runs_root", "pipeline_log_dir", "slurm_log_dir")], use.names=FALSE)), recurse = TRUE)
   }
   p

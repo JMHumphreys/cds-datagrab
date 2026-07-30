@@ -11,3 +11,6 @@
 ^\.codex/
 ^.*\.Rproj$
 ^\.Rproj\.user$
+^\.git$
+^local$
+^runtime$
