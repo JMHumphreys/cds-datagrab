@@ -20,9 +20,9 @@ test_that("LAI request is direct ERA5 at 00 UTC and uses valid calendar days", {
 
 test_that("AgERA5 request uses its dataset-specific schema", {
   spec <- get_variable_spec("agera5_relhum_min")
-  cfg <- list(project=list(dataset_id=spec$id), spatial=list(source_grid_degrees=.1, align_request_to_source_grid=TRUE), cds=list(dataset_short_name=spec$dataset_short_name, variable=spec$cds_variable, daily_statistic=spec$daily_statistic, format="netcdf"))
+  cfg <- list(project=list(dataset_id=spec$id), spatial=list(source_grid_degrees=.1, align_request_to_source_grid=TRUE), cds=list(dataset_short_name=spec$dataset_short_name, variable=spec$cds_variable, daily_statistic=spec$daily_statistic, dataset_version="2_0"))
   req <- build_variable_requests(as.Date(c("2025-06-01","2025-06-03")), c(42.8,-126,-1.1,-34), cfg, spec)[[1]]
-  expect_equal(build_cds_api_payload(req), list(format="netcdf", variable=spec$cds_variable, year="2025", month="06", day=c("01","03"), daily_statistic="24_hour_minimum", area=c(42.8,-126,-1.1,-34)))
+  expect_equal(build_cds_api_payload(req), list(variable=spec$cds_variable, statistic=list("24_hour_minimum"), year="2025", month="06", day=c("01","03"), version="2_0", area=c(42.8,-126,-1.1,-34)))
   expect_false(any(c("temperature","dewpoint","tetens") %in% tolower(names(req))))
 })
 

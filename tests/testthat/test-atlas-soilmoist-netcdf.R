@@ -11,16 +11,17 @@ make_atlas_soilmoist_fixture <- function(path) {
 
 test_that("Atlas soilmoist dates normalize to canonical ISO keys", {
   expected <- as.Date("2026-07-01") + 0:2
-  forms <- list(expected, as.character(expected), as.numeric(expected), factor(as.character(expected)), structure(expected, names=letters[1:3]), list(expected))
+  forms <- list(expected, as.character(expected), factor(as.character(expected)), structure(expected, names=letters[1:3]), list(expected))
   keys <- lapply(forms, function(x) format(normalize_date_vector(x, "expected_dates"), "%Y-%m-%d"))
   expect_true(all(vapply(keys, identical, logical(1), keys[[1]])))
   expect_equal(keys[[1]], c("2026-07-01", "2026-07-02", "2026-07-03"))
+  expect_error(normalize_date_vector(as.numeric(expected), "expected_dates"), "must contain Date values")
 })
 
 test_that("exact Atlas NetCDF structure reads without date or unit failure", {
   skip_if_not_installed("ncdf4"); skip_if_not_installed("terra")
   f <- tempfile(fileext=".nc"); make_atlas_soilmoist_fixture(f)
-  x <- read_era5_daily_with_ncdf4(f, expected_dates=as.numeric(as.Date("2026-07-01") + 0:2), variable_spec=get_variable_spec("era5_soilmoist"))
+  x <- read_era5_daily_with_ncdf4(f, expected_dates=as.Date("2026-07-01") + 0:2, variable_spec=get_variable_spec("era5_soilmoist"))
   expect_equal(x$selected_netcdf_variable, "swvl1")
   expect_equal(x$data_variable_dimensions, c("longitude", "latitude", "valid_time"))
   expect_equal(x$dimension_lengths, c(369,177,3))
