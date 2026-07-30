@@ -11,4 +11,9 @@ SBATCH_SCRIPT="${SBATCH_SCRIPT:-$REPO_DIR/hpc/run_era5_variable.slurm}"
 [[ "$PROFILE" == smoke || "$PROFILE" == production ]] || { echo "PROFILE must be smoke or production" >&2; exit 2; }
 mkdir -p "$CDS_DATAGRAB_ROOT/logs/slurm/$PROFILE"
 export REPO_DIR PROFILE CONFIG MODE DRY_RUN OBSERVED_END FUTURE_END CDS_DATAGRAB_ROOT
-sbatch --job-name="$JOB_NAME" --output="$SLURM_OUTPUT" --error="$SLURM_ERROR" --export=ALL,CDS_DATAGRAB_ROOT="$CDS_DATAGRAB_ROOT",CONFIG="$CONFIG",MODE="$MODE",DRY_RUN="$DRY_RUN",OBSERVED_END="$OBSERVED_END",FUTURE_END="$FUTURE_END" "$SBATCH_SCRIPT"
+if [[ "${DIRECT_EXECUTION:-false}" == "true" ]]; then
+  bash "$SBATCH_SCRIPT"
+  exit 0
+fi
+job_id=$(sbatch --parsable --job-name="$JOB_NAME" --output="$SLURM_OUTPUT" --error="$SLURM_ERROR" --export=ALL,CDS_DATAGRAB_ROOT="$CDS_DATAGRAB_ROOT",PROFILE="$PROFILE",CONFIG="$CONFIG",MODE="$MODE",DRY_RUN="$DRY_RUN",OBSERVED_END="$OBSERVED_END",FUTURE_END="$FUTURE_END" "$SBATCH_SCRIPT")
+printf 'submitted job ID: %s\njob name: %s\nconfiguration: %s\nmode: %s\noutput root: %s\nstdout path pattern: %s\nstderr path pattern: %s\n' "$job_id" "$JOB_NAME" "$CONFIG" "$MODE" "$CDS_DATAGRAB_ROOT" "$SLURM_OUTPUT" "$SLURM_ERROR"

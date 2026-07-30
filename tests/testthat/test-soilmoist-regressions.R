@@ -26,5 +26,5 @@ test_that("submission wrappers keep variable-specific labels and delegate throug
   expect_match(soil, "config/era5_soilmoist_smoke\\.yml")
   expect_false(grepl("submit_era5_mintemp\\.sh", soil, fixed=FALSE))
   expect_match(mint, "JOB_NAME=\\\"cds_mint\\\"")
-  expect_match(generic, "sbatch --job-name=\\\"\\$JOB_NAME\\\" --output=\\\"\\$SLURM_OUTPUT\\\" --error=\\\"\\$SLURM_ERROR\\\"")
+  expect_match(generic, "sbatch --parsable --job-name=\\\"\\$JOB_NAME\\\" --output=\\\"\\$SLURM_OUTPUT\\\" --error=\\\"\\$SLURM_ERROR\\\"")
 })
