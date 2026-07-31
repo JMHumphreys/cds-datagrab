@@ -1,5 +1,36 @@
 # Content-based AgERA5 archive handling. The existing direct-NetCDF path is
 # retained; this adapter only changes the AgERA5 response/container boundary.
+normalize_netcdf_name <- function(x) {
+  x <- tolower(as.character(x)); x <- gsub("[^a-z0-9]+", "_", x); gsub("^_|_$", "", x)
+}
+get_nc_attribute <- function(nc, variable, attribute) {
+  result <- ncdf4::ncatt_get(nc, variable, attribute)
+  if (!isTRUE(result$hasatt)) return(NA_character_)
+  as.character(result$value)
+}
+.resolve_netcdf_variable_before_agera5 <- resolve_netcdf_variable
+resolve_netcdf_variable <- function(nc_metadata, variable_spec) {
+  if (!identical(variable_spec$id, "agera5_relhum_min")) return(.resolve_netcdf_variable_before_agera5(nc_metadata, variable_spec))
+  aliases <- unique(c(variable_spec$netcdf_variable_names, "Derived_Relative_Humidity_2m_Min_24h", "derived_relative_humidity_2m_min_24h", "relative_humidity_2m_min"))
+  names_available <- names(nc_metadata$variables)
+  exact <- intersect(aliases, names_available)
+  if (length(exact) == 1L) return(exact[[1]])
+  normalized <- normalize_netcdf_name(names_available)
+  alias_norm <- normalize_netcdf_name(aliases)
+  norm_hits <- names_available[normalized %in% alias_norm]
+  if (length(norm_hits) == 1L) return(norm_hits[[1]])
+  excluded <- grepl("^(crs|time|lat|latitude|lon|longitude)(_|$)|bounds|grid", normalized)
+  candidates <- names_available[!excluded]
+  candidates <- candidates[vapply(candidates, function(n) {
+    v <- nc_metadata$variables[[n]]
+    units <- normalize_source_units(v$units %||% NA_character_)
+    dims <- normalize_netcdf_name(v$dimensions %||% character())
+    long <- normalize_netcdf_name(v$long_name %||% "")
+    identical(units, "percent") && any(dims %in% c("lon","longitude")) && any(dims %in% c("lat","latitude")) && grepl("relative_humidity", long) && grepl("minimum|min_24|24_hour", long)
+  }, logical(1))]
+  if (length(candidates) != 1L) stop("Unable to select a unique AgERA5 RH variable; available variables: ", paste(names_available, collapse=", "), call.=FALSE)
+  candidates[[1]]
+}
 archive_member_date <- function(name) {
   hits <- regmatches(basename(name), gregexpr("(?<![0-9])20[0-9]{6}(?![0-9])", basename(name), perl=TRUE))[[1]]
   if (!length(hits)) return(NA_character_)
@@ -38,7 +69,7 @@ extract_agera5_archive <- function(archive_path, extracted_root, request_hash, v
     if (nc[[i]]) {
       md <- tryCatch(inspect_netcdf_ncdf4(p), error=function(e)e)
       if (!inherits(md, "error")) {
-        variable_candidate <- length(intersect(variable_spec$netcdf_variable_names, names(md$variables))) > 0L
+        variable_candidate <- !inherits(tryCatch(resolve_netcdf_variable(md, variable_spec), error=function(e)e), "error")
         content_date <- if (length(md$decoded_dates)) canonical_iso_dates(md$decoded_dates[[1]], "date_from_content") else NA_character_
         validation <- if (variable_candidate) "candidate" else "variable not found"
       } else validation <- conditionMessage(md)
