@@ -12,6 +12,24 @@ coverage_cell_neighbors <- function(r, cell) {
   as.integer(terra::cellFromRowColCombine(r, rows, cols))
 }
 
+find_nonserializable_objects <- function(x, path="root") {
+  forbidden <- c("SpatRaster","SpatVector","sf","sfc","externalptr","connection","environment","function")
+  cls <- class(x)
+  if (any(cls %in% forbidden) || typeof(x) %in% c("externalptr","environment","closure","builtin","special")) return(list(list(path=path, class=cls, message=paste0(path, ": class ",paste(cls,collapse="/")," is not allowed in JSON metadata"))))
+  if (is.list(x)) {
+    out <- list()
+    for (i in seq_along(x)) out <- c(out, find_nonserializable_objects(x[[i]], paste0(path,".",if(!is.null(names(x))&&nzchar(names(x)[i]))names(x)[i]else"[[",i,"]]")))
+    return(out)
+  }
+  list()
+}
+
+assert_json_serializable <- function(x, context="object") {
+  bad <- find_nonserializable_objects(x, context)
+  if (length(bad)) stop(bad[[1]]$message, call.=FALSE)
+  tryCatch({ jsonlite::toJSON(x, auto_unbox=TRUE, null="null", na="null"); invisible(TRUE) }, error=function(e) stop(sprintf("%s is not JSON serializable: %s",context,conditionMessage(e)),call.=FALSE))
+}
+
 analyze_template_coverage <- function(bilinear, nearest, source, template, mask_template=TRUE, maximum_repair_count=4L, maximum_repair_fraction=0.0005) {
   if (mask_template) {
     bilinear <- terra::mask(bilinear, template)
@@ -48,7 +66,8 @@ analyze_template_coverage <- function(bilinear, nearest, source, template, mask_
   repaired_cells <- if (eligible) missing_cells[repairable & isolated] else integer()
   if (length(repaired_cells)) bilinear_values[repaired_cells] <- nearest_values[repaired_cells]
   terra::values(bilinear) <- bilinear_values
-  list(raster=bilinear, details=details, template_non_na=template_non_na, missing_inside_count=length(missing_cells), repair_applied=length(repaired_cells)>0L, repair_count=length(repaired_cells), repair_fraction=repair_fraction, repaired_cell_ids=repaired_cells, unresolved_count=length(missing_cells)-length(repaired_cells), eligible=eligible, source_cell_count=length(source_values), source_non_na_count=sum(!is.na(source_values)), source_na_count=sum(is.na(source_values)), source_na_fraction=if(length(source_values))sum(is.na(source_values))/length(source_values)else 0)
+  diagnostics <- list(details=details, template_non_na=template_non_na, missing_inside_count=length(missing_cells), repair_applied=length(repaired_cells)>0L, repair_method=if(length(repaired_cells))"nearest_for_isolated_bilinear_na"else NULL, repair_count=length(repaired_cells), repair_fraction=repair_fraction, repaired_cell_ids=repaired_cells, unresolved_count=length(missing_cells)-length(repaired_cells), eligible=eligible, source_cell_count=length(source_values), source_non_na_count=sum(!is.na(source_values)), source_na_count=sum(is.na(source_values)), source_na_fraction=if(length(source_values))sum(is.na(source_values))/length(source_values)else 0)
+  list(raster=bilinear, diagnostics=diagnostics, details=details, repaired=length(repaired_cells)>0L, template_non_na=template_non_na, missing_inside_count=length(missing_cells), repair_applied=length(repaired_cells)>0L, repair_count=length(repaired_cells), repair_fraction=repair_fraction, repaired_cell_ids=repaired_cells, unresolved_count=length(missing_cells)-length(repaired_cells), eligible=eligible, source_cell_count=length(source_values), source_non_na_count=sum(!is.na(source_values)), source_na_count=sum(is.na(source_values)), source_na_fraction=if(length(source_values))sum(is.na(source_values))/length(source_values)else 0)
 }
 
 validate_template_coverage <- function(output,template,require_complete=TRUE,diagnostic_dir=NULL,date=NULL,prefix=NULL) {out<-if(is.character(output))terra::rast(output)else output;template_values<-terra::values(template,mat=FALSE);output_values<-terra::values(out,mat=FALSE);template_valid<-!is.na(template_values);output_valid<-!is.na(output_values);if(length(template_valid)!=length(output_valid))stop("Output and template cell counts differ",call.=FALSE);missing_inside<-template_valid&!output_valid;outside_mask<-!template_valid&output_valid;idx<-which(missing_inside);xy<-if(length(idx))terra::xyFromCell(template,idx)else matrix(numeric(),ncol=2);result<-list(template_non_na=sum(template_valid),output_non_na=sum(output_valid),missing_inside_count=sum(missing_inside),outside_mask_count=sum(outside_mask),complete=!any(missing_inside|outside_mask),missing_cell_indices=idx,missing_cell_details=if(length(idx))lapply(seq_along(idx),function(i)list(cell_id=idx[[i]],row=terra::rowFromCell(template,idx[[i]]),column=terra::colFromCell(template,idx[[i]]),template_x=xy[i,1],template_y=xy[i,2],longitude=xy[i,1],latitude=xy[i,2],template_value=template_values[idx[[i]]]))else list(),missing_x_range=if(length(idx))range(xy[,1])else c(NA_real_,NA_real_),missing_y_range=if(length(idx))range(xy[,2])else c(NA_real_,NA_real_));if(!is.null(diagnostic_dir)&&!result$complete){fs::dir_create(diagnostic_dir,recurse=TRUE);stem<-if(is.null(date))"output"else paste0(prefix%||%"mintemp","_",format(as.Date(date),"%Y-%m-%d"));m<-template;o<-template;terra::values(m)<-ifelse(missing_inside,1,NA);terra::values(o)<-ifelse(outside_mask,1,NA);result$coverage_diagnostic_paths<-c(missing_inside=file.path(diagnostic_dir,paste0(stem,"_missing_inside.tif")),outside_mask=file.path(diagnostic_dir,paste0(stem,"_outside_mask.tif")));terra::writeRaster(m,result$coverage_diagnostic_paths[[1]],overwrite=TRUE);terra::writeRaster(o,result$coverage_diagnostic_paths[[2]],overwrite=TRUE)}else result$coverage_diagnostic_paths<-character();if(isTRUE(require_complete)&&!result$complete)stop(sprintf("Template coverage incomplete: missing_inside_count=%d outside_mask_count=%d",result$missing_inside_count,result$outside_mask_count),call.=FALSE);result }
