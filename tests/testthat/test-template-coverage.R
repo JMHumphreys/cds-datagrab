@@ -65,7 +65,8 @@ test_that("isolated land-mask mismatch uses local final-grid IDW", {
   source <- terra::rast(nrows=3,ncols=3,xmin=0,xmax=3,ymin=0,ymax=3,crs="EPSG:4326"); terra::values(source) <- NA_real_
   make <- function() terra::rast(nrows=50,ncols=50,xmin=0,xmax=3,ymin=0,ymax=3,crs="EPSG:4326")
   template <- make(); bilinear <- make(); nearest <- make(); terra::values(template) <- 1; terra::values(bilinear) <- 50; terra::values(nearest) <- 50
-  target <- 1250L; terra::values(bilinear)[target] <- NA; terra::values(nearest)[target] <- NA
+  target <- 1275L; donors <- setdiff(coverage_cell_neighbors(template,target),target); terra::values(template)[donors] <- NA; terra::values(bilinear)[target] <- NA; terra::values(nearest)[target] <- NA
+  donor_values <- c(77.04581,76.26991,77.67487,76.25233,NA,NA,NA,NA); terra::values(bilinear)[donors] <- donor_values
   result <- analyze_template_coverage(bilinear,nearest,source,template)
-  expect_equal(result$diagnostics$details[[1]]$classification,"isolated_land_mask_mismatch"); expect_true(result$repaired); expect_equal(result$diagnostics$repair_method,"local_final_grid_idw"); expect_true(is.finite(terra::values(result$raster,mat=FALSE)[target])); expect_equal(result$diagnostics$repair_count,1)
+  expected <- weighted.mean(donor_values[1:4],1/result$diagnostics$details[[1]]$target_neighbor_distances[1:4]); expect_equal(result$diagnostics$details[[1]]$classification,"isolated_land_mask_mismatch"); expect_true(result$repaired); expect_equal(result$diagnostics$repair_method,"local_final_grid_idw"); expect_equal(result$diagnostics$details[[1]]$unmasked_bilinear_neighbor_finite_count,4); expect_equal(result$diagnostics$details[[1]]$masked_output_neighbor_finite_count,0); expect_equal(terra::values(result$raster,mat=FALSE)[target],expected); expect_true(all(is.na(terra::values(result$raster,mat=FALSE)[donors]))); expect_equal(result$diagnostics$repair_count,1)
 })
