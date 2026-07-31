@@ -8,6 +8,17 @@ get_nc_attribute <- function(nc, variable, attribute) {
   if (!isTRUE(result$hasatt)) return(NA_character_)
   as.character(result$value)
 }
+agera5_archive_manifest_schema_version <- 2L
+agera5_adapter_inspection_version <- "agera5-rh-inspection-v2"
+agera5_alias_hash <- function(variable_spec) digest::digest(c("Derived_Relative_Humidity_2m_Min_24h","derived_relative_humidity_2m_min_24h","2m_relative_humidity_derived","relative_humidity_2m_min"), algo="sha256")
+agera5_selection_rules_hash <- function() digest::digest("exact-alias>normalized-alias>percent+lon+lat+relative-humidity+minimum-metadata", algo="sha256")
+agera5_manifest_fingerprints <- function(variable_spec, checksum) {
+  list(archive_manifest_schema_version=agera5_archive_manifest_schema_version,
+       adapter_id="agera5_relhum_min", adapter_inspection_version=agera5_adapter_inspection_version,
+       dataset_id=variable_spec$id, variable_spec_hash=variable_spec$variable_spec_hash,
+       variable_alias_hash=agera5_alias_hash(variable_spec), selection_rules_hash=agera5_selection_rules_hash(),
+       archive_checksum=checksum, created_with_package_version=as.character(utils::packageVersion("cdsdatagrab")))
+}
 .resolve_netcdf_variable_before_agera5 <- resolve_netcdf_variable
 resolve_netcdf_variable <- function(nc_metadata, variable_spec) {
   if (!identical(variable_spec$id, "agera5_relhum_min")) return(.resolve_netcdf_variable_before_agera5(nc_metadata, variable_spec))
@@ -49,8 +60,41 @@ extract_agera5_archive <- function(archive_path, extracted_root, request_hash, v
   manifest_path <- file.path(final_dir, "archive_manifest.csv")
   if (dir.exists(final_dir) && file.exists(manifest_path)) {
     old <- tryCatch(utils::read.csv(manifest_path, stringsAsFactors=FALSE), error=function(e) NULL)
-    if (!is.null(old) && nrow(old) && all(old$archive_checksum == checksum)) return(old)
-    stop("Existing extracted AgERA5 directory has a different archive checksum", call.=FALSE)
+    fp <- agera5_manifest_fingerprints(variable_spec, checksum)
+    inventory_matches <- function(x) {
+      required <- c("member_relative_path", "extracted_path", "member_size", "member_checksum")
+      if (!all(required %in% names(x)) || !nrow(x) || any(!vapply(x$member_relative_path, archive_member_safe, logical(1)))) return(FALSE)
+      all(vapply(seq_len(nrow(x)), function(i) {
+        p <- x$extracted_path[[i]]
+        file.exists(p) && identical(as.numeric(file.info(p)$size), as.numeric(x$member_size[[i]])) &&
+          identical(digest::digest(file=p, algo="sha256"), as.character(x$member_checksum[[i]]))
+      }, logical(1)))
+    }
+    current <- !is.null(old) && nrow(old) && inventory_matches(old) &&
+      all(vapply(names(fp), function(n) n %in% names(old) && all(as.character(old[[n]]) == as.character(fp[[n]])), logical(1)))
+    if (isTRUE(current)) {
+      attr(old, "extraction_reused") <- TRUE; attr(old, "manifest_reused") <- TRUE
+      return(old)
+    }
+    if (!is.null(old) && nrow(old) && all(file.exists(old$extracted_path)) && all(old$archive_checksum == checksum)) {
+      for (n in c("variable_candidate","selected","selection_reason","validation_message","selected_netcdf_variable","date_from_content")) if (!n %in% names(old)) old[[n]] <- NA
+      for (n in names(fp)) old[[n]] <- unname(fp[[n]])
+      rebuilt <- lapply(seq_len(nrow(old)), function(i) {
+        p <- old$extracted_path[[i]]; md <- tryCatch(inspect_netcdf_ncdf4(p), error=function(e)e)
+        selected <- if (inherits(md, "error")) NA_character_ else tryCatch(resolve_netcdf_variable(md, variable_spec), error=function(e) NA_character_)
+        old$variable_candidate[[i]] <- !is.na(selected); old$selected[[i]] <- FALSE; old$selection_reason[[i]] <- ""
+        old$validation_message[[i]] <- if (!is.na(selected)) "candidate" else "variable not found"
+        old$selected_netcdf_variable[[i]] <- selected
+        old$date_from_content[[i]] <- if (!inherits(md, "error") && length(md$decoded_dates)) canonical_iso_dates(md$decoded_dates[[1]], "date_from_content") else NA_character_
+        old[i,]
+      })
+      rebuilt <- do.call(rbind, rebuilt); utils::write.csv(rebuilt, manifest_path, row.names=FALSE)
+      if (!is.null(run_dir)) utils::write.csv(rebuilt, file.path(run_dir, "archive_manifest.csv"), row.names=FALSE)
+      attr(rebuilt, "extraction_reused") <- TRUE; attr(rebuilt, "manifest_reused") <- FALSE
+      attr(rebuilt, "manifest_rebuild_reason") <- "adapter fingerprint changed"
+      return(rebuilt)
+    }
+    if (!is.null(old) && nrow(old) && !all(old$archive_checksum == checksum)) stop("Existing extracted AgERA5 directory has a different archive checksum", call.=FALSE)
   }
   listing <- tryCatch(utils::unzip(archive_path, list=TRUE), error=function(e) stop("Malformed ZIP archive: ", conditionMessage(e), call.=FALSE))
   members <- as.character(listing$Name)
@@ -63,6 +107,7 @@ extract_agera5_archive <- function(archive_path, extracted_root, request_hash, v
   extracted <- file.path(partial, members)
   if (any(!file.exists(extracted))) stop("Archive extraction did not produce every member", call.=FALSE)
   nc <- grepl("\\.nc4?$", members, ignore.case=TRUE)
+  fp <- agera5_manifest_fingerprints(variable_spec, checksum)
   rows <- lapply(seq_along(members), function(i) {
     p <- extracted[[i]]; fmt <- detect_download_format(p); d <- archive_member_date(members[[i]])
     variable_candidate <- FALSE; content_date <- NA_character_; validation <- "unselected"
@@ -74,11 +119,16 @@ extract_agera5_archive <- function(archive_path, extracted_root, request_hash, v
         validation <- if (variable_candidate) "candidate" else "variable not found"
       } else validation <- conditionMessage(md)
     }
-    data.frame(archive_path=normalizePath(archive_path,winslash="/",mustWork=FALSE), archive_checksum=checksum,
+    data.frame(archive_manifest_schema_version=fp$archive_manifest_schema_version, adapter_id=fp$adapter_id,
+      adapter_inspection_version=fp$adapter_inspection_version, dataset_id=fp$dataset_id,
+      variable_spec_hash=fp$variable_spec_hash, variable_alias_hash=fp$variable_alias_hash,
+      selection_rules_hash=fp$selection_rules_hash, created_with_package_version=fp$created_with_package_version,
+      archive_path=normalizePath(archive_path,winslash="/",mustWork=FALSE), archive_checksum=checksum,
       request_hash=request_hash, member_name=members[[i]], member_relative_path=gsub("\\\\","/",members[[i]]),
       extracted_path=normalizePath(p,winslash="/",mustWork=FALSE), member_size=as.numeric(listing$Length[[i]]),
       member_checksum=digest::digest(file=p,algo="sha256"), detected_format=fmt, date_from_filename=d,
-      date_from_content=content_date, variable_candidate=variable_candidate, selected=FALSE,
+      date_from_content=content_date, variable_candidate=variable_candidate,
+      selected_netcdf_variable=if (nc[[i]] && variable_candidate) tryCatch(resolve_netcdf_variable(inspect_netcdf_ncdf4(p),variable_spec), error=function(e) NA_character_) else NA_character_, selected=FALSE,
       selection_reason="", validation_message=validation, stringsAsFactors=FALSE)
   })
   manifest <- do.call(rbind, rows)
@@ -90,6 +140,7 @@ extract_agera5_archive <- function(archive_path, extracted_root, request_hash, v
   manifest$selected <- FALSE
   utils::write.csv(manifest, file.path(final_dir,"archive_manifest.csv"), row.names=FALSE)
   if (!is.null(run_dir)) utils::write.csv(manifest, file.path(run_dir,"archive_manifest.csv"), row.names=FALSE)
+  attr(manifest, "extraction_reused") <- FALSE; attr(manifest, "manifest_reused") <- FALSE
   manifest
 }
 
@@ -100,7 +151,10 @@ select_agera5_archive_members <- function(manifest, request_dates) {
     z <- manifest[manifest$date_from_filename == dates[[i]] & manifest$variable_candidate & manifest$detected_format %in% c("netcdf4_hdf5","netcdf_classic"),,drop=FALSE]
     if (nrow(z) != 1L) stop("Expected exactly one AgERA5 NetCDF member for ", dates[[i]], "; found ", nrow(z), call.=FALSE)
     if (!is.na(z$date_from_content[[1]]) && z$date_from_content[[1]] != dates[[i]]) stop("Archive filename/content date disagreement for ", dates[[i]], call.=FALSE)
-    z$selected <- TRUE; z$selection_reason <- "unique variable/date match"; out[[i]] <- z
+    z$selected <- TRUE; z$selection_reason <- "unique variable/date match"
+    if (!"selected_netcdf_variable" %in% names(z)) z$selected_netcdf_variable <- NA_character_
+    if (is.na(z$selected_netcdf_variable[[1]])) z$selected_netcdf_variable[[1]] <- "Derived_Relative_Humidity_2m_Min_24h"
+    out[[i]] <- z
   }
   do.call(rbind, out)
 }
