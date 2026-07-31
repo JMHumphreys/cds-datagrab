@@ -46,6 +46,15 @@ analyze_template_coverage <- function(bilinear, nearest, source, template, mask_
   source_extent <- terra::ext(source)
   source_values <- terra::values(source, mat=FALSE)
   source_cells <- if (nrow(source_xy)) terra::cellFromXY(source, source_xy) else integer()
+  missing_cells <- which(missing)
+  target_neighbors <- lapply(missing_cells, function(cell) setdiff(coverage_cell_neighbors(template, cell), cell))
+  component_size <- vapply(seq_along(missing_cells), function(k) {
+    cell <- missing_cells[[k]]; frontier <- cell; seen <- integer()
+    while(length(frontier)) { seen <- unique(c(seen, frontier)); frontier <- setdiff(unique(unlist(lapply(frontier, function(z) coverage_cell_neighbors(template,z)))), seen); frontier <- intersect(frontier, missing_cells) }
+    length(seen)
+  }, integer(1))
+  target_xy <- if (length(missing_cells)) terra::xyFromCell(template, unique(unlist(target_neighbors))) else matrix(numeric(), ncol=2)
+  target_neighbor_values <- if (length(missing_cells)) lapply(target_neighbors, function(z) as.numeric(bilinear_values[z])) else list()
   details <- lapply(seq_along(source_cells), function(k) {
     cell <- source_cells[[k]]
     inside <- is.finite(cell) && source_xy[k,1] >= source_extent$xmin && source_xy[k,1] <= source_extent$xmax && source_xy[k,2] >= source_extent$ymin && source_xy[k,2] <= source_extent$ymax
@@ -53,20 +62,27 @@ analyze_template_coverage <- function(bilinear, nearest, source, template, mask_
     neighbor_values <- if (length(neighbors)) as.numeric(source_values[neighbors]) else numeric()
     bilinear_value <- bilinear_values[which(missing)[k]]
     nearest_value <- nearest_values[which(missing)[k]]
-    classification <- if (!inside) "outside_source_support" else if (is.na(nearest_value) || !length(neighbor_values) || all(is.na(neighbor_values))) "source_nodata" else if (is.na(bilinear_value) && is.finite(nearest_value)) "bilinear_interpolation_artifact" else "unknown"
-    list(cell_id=which(missing)[k], row=terra::rowFromCell(template, which(missing)[k]), column=terra::colFromCell(template, which(missing)[k]), template_x=xy[k,1], template_y=xy[k,2], longitude=xy[k,1], latitude=xy[k,2], template_value=template_values[which(missing)[k]], distance_to_projected_source_boundary=min(abs(source_xy[k,1]-source_extent$xmin),abs(source_xy[k,1]-source_extent$xmax),abs(source_xy[k,2]-source_extent$ymin),abs(source_xy[k,2]-source_extent$ymax)), bilinear_value=bilinear_value, nearest_value=nearest_value, source_cell=cell, source_neighbor_values=neighbor_values, source_neighbor_na_count=sum(is.na(neighbor_values)), inside_source_extent=inside, classification=classification)
+    target_cells <- target_neighbors[[k]]; target_values <- target_neighbor_values[[k]]; target_coords <- if(length(target_cells))terra::xyFromCell(template,target_cells)else matrix(numeric(),ncol=2); target_distances <- if(length(target_cells))sqrt(rowSums((target_coords-matrix(xy[k,],nrow=nrow(target_coords),ncol=2,byrow=TRUE))^2))else numeric(); finite_target <- is.finite(target_values); classification <- if (!inside) "outside_source_support" else if (is.na(nearest_value) || !length(neighbor_values) || all(is.na(neighbor_values))) "source_nodata" else if (is.na(bilinear_value) && is.finite(nearest_value)) "bilinear_interpolation_artifact" else "unknown"
+    list(cell_id=missing_cells[k], row=terra::rowFromCell(template, missing_cells[k]), column=terra::colFromCell(template, missing_cells[k]), template_x=xy[k,1], template_y=xy[k,2], longitude=NA_real_, latitude=NA_real_, template_value=template_values[missing_cells[k]], distance_to_projected_source_boundary=min(abs(source_xy[k,1]-source_extent$xmin),abs(source_xy[k,1]-source_extent$xmax),abs(source_xy[k,2]-source_extent$ymin),abs(source_xy[k,2]-source_extent$ymax)), bilinear_value=bilinear_value, nearest_value=nearest_value, source_cell=cell, source_neighbor_values=neighbor_values, source_neighbor_na_count=sum(is.na(neighbor_values)), inside_source_extent=inside, target_neighbor_cell_ids=target_cells, target_neighbor_rows=if(length(target_cells))terra::rowFromCell(template,target_cells)else integer(), target_neighbor_columns=if(length(target_cells))terra::colFromCell(template,target_cells)else integer(), target_neighbor_x=if(length(target_coords))target_coords[,1]else numeric(), target_neighbor_y=if(length(target_coords))target_coords[,2]else numeric(), target_neighbor_distances=target_distances, target_neighbor_values=target_values, target_finite_neighbor_count=sum(finite_target), target_na_neighbor_count=sum(!finite_target), missing_component_size=component_size[k], classification=classification)
   })
-  repairable <- vapply(details, function(x) identical(x$classification, "bilinear_interpolation_artifact"), logical(1))
-  missing_cells <- which(missing)
-  isolated <- if (!length(missing_cells)) logical() else vapply(missing_cells, function(cell) { n <- coverage_cell_neighbors(template, cell); sum(missing[n], na.rm=TRUE) == 1L }, logical(1))
-  repair_count <- sum(repairable & isolated)
+  if (length(details)) {
+    target_xy_all <- do.call(rbind,lapply(details,function(x)c(x$template_x,x$template_y)))
+    lonlat <- terra::crds(terra::project(terra::vect(target_xy_all,crs=terra::crs(template)),"EPSG:4326"))
+    for (k in seq_along(details)) { details[[k]]$longitude <- lonlat[k,1]; details[[k]]$latitude <- lonlat[k,2]; if(length(details[[k]]$target_neighbor_cell_ids)){q<-terra::crds(terra::project(terra::vect(cbind(details[[k]]$target_neighbor_x,details[[k]]$target_neighbor_y),crs=terra::crs(template)),"EPSG:4326"));details[[k]]$target_neighbor_longitude<-q[,1];details[[k]]$target_neighbor_latitude<-q[,2]}else{details[[k]]$target_neighbor_longitude<-numeric();details[[k]]$target_neighbor_latitude<-numeric()}}
+    land <- vapply(details,function(x)identical(x$classification,"source_nodata")&&is.na(x$bilinear_value)&&is.na(x$nearest_value)&&x$source_neighbor_na_count==length(x$source_neighbor_values)&&x$missing_component_size==1L&&x$target_finite_neighbor_count>=4L,logical(1))
+    for (k in which(land)) details[[k]]$classification <- "isolated_land_mask_mismatch"
+  }
+  artifact <- vapply(details, function(x) identical(x$classification, "bilinear_interpolation_artifact") && is.finite(x$nearest_value) && x$missing_component_size==1L, logical(1))
+  land <- vapply(details, function(x) identical(x$classification, "isolated_land_mask_mismatch"), logical(1))
+  repairable <- artifact | land
+  repair_count <- sum(repairable)
   template_non_na <- sum(template_valid)
   repair_fraction <- if (template_non_na) repair_count / template_non_na else 0
-  eligible <- length(details) > 0L && all(repairable & isolated) && repair_count <= maximum_repair_count && repair_fraction <= maximum_repair_fraction
-  repaired_cells <- if (eligible) missing_cells[repairable & isolated] else integer()
-  if (length(repaired_cells)) bilinear_values[repaired_cells] <- nearest_values[repaired_cells]
+  eligible <- length(details) > 0L && all(repairable) && repair_count <= maximum_repair_count && repair_fraction <= maximum_repair_fraction
+  repaired_cells <- if (eligible) missing_cells[repairable] else integer()
+  if (length(repaired_cells)) for (k in which(repairable)) if (land[k]) bilinear_values[missing_cells[k]] <- weighted.mean(details[[k]]$target_neighbor_values[is.finite(details[[k]]$target_neighbor_values)], 1 / details[[k]]$target_neighbor_distances[is.finite(details[[k]]$target_neighbor_values)]) else bilinear_values[missing_cells[k]] <- nearest_values[missing_cells[k]]
   terra::values(bilinear) <- bilinear_values
-  diagnostics <- list(details=details, template_non_na=template_non_na, missing_inside_count=length(missing_cells), repair_applied=length(repaired_cells)>0L, repair_method=if(length(repaired_cells))"nearest_for_isolated_bilinear_na"else NULL, repair_count=length(repaired_cells), repair_fraction=repair_fraction, repaired_cell_ids=repaired_cells, unresolved_count=length(missing_cells)-length(repaired_cells), eligible=eligible, source_cell_count=length(source_values), source_non_na_count=sum(!is.na(source_values)), source_na_count=sum(is.na(source_values)), source_na_fraction=if(length(source_values))sum(is.na(source_values))/length(source_values)else 0)
+  diagnostics <- list(details=details, template_non_na=template_non_na, missing_inside_count=length(missing_cells), repair_applied=length(repaired_cells)>0L, repair_method=if(any(land[repairable]))"local_final_grid_idw"else if(length(repaired_cells))"nearest_for_isolated_bilinear_na"else NULL, repair_count=length(repaired_cells), repair_fraction=repair_fraction, repaired_cell_ids=repaired_cells, unresolved_count=length(missing_cells)-length(repaired_cells), eligible=eligible, source_cell_count=length(source_values), source_non_na_count=sum(!is.na(source_values)), source_na_count=sum(is.na(source_values)), source_na_fraction=if(length(source_values))sum(is.na(source_values))/length(source_values)else 0)
   list(raster=bilinear, diagnostics=diagnostics, details=details, repaired=length(repaired_cells)>0L, template_non_na=template_non_na, missing_inside_count=length(missing_cells), repair_applied=length(repaired_cells)>0L, repair_count=length(repaired_cells), repair_fraction=repair_fraction, repaired_cell_ids=repaired_cells, unresolved_count=length(missing_cells)-length(repaired_cells), eligible=eligible, source_cell_count=length(source_values), source_non_na_count=sum(!is.na(source_values)), source_na_count=sum(is.na(source_values)), source_na_fraction=if(length(source_values))sum(is.na(source_values))/length(source_values)else 0)
 }
 

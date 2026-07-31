@@ -59,3 +59,13 @@ test_that("complete bilinear coverage does not invoke repair", {
   expect_false(x$repair_applied); expect_equal(x$repair_count,0); expect_equal(x$unresolved_count,0); expect_equal(x$details,list())
   expect_equal(terra::values(x$raster,mat=FALSE),rep(7,4))
 })
+
+test_that("isolated land-mask mismatch uses local final-grid IDW", {
+  skip_if_not_installed("terra")
+  source <- terra::rast(nrows=3,ncols=3,xmin=0,xmax=3,ymin=0,ymax=3,crs="EPSG:4326"); terra::values(source) <- NA_real_
+  make <- function() terra::rast(nrows=50,ncols=50,xmin=0,xmax=3,ymin=0,ymax=3,crs="EPSG:4326")
+  template <- make(); bilinear <- make(); nearest <- make(); terra::values(template) <- 1; terra::values(bilinear) <- 50; terra::values(nearest) <- 50
+  target <- 1250L; terra::values(bilinear)[target] <- NA; terra::values(nearest)[target] <- NA
+  result <- analyze_template_coverage(bilinear,nearest,source,template)
+  expect_equal(result$diagnostics$details[[1]]$classification,"isolated_land_mask_mismatch"); expect_true(result$repaired); expect_equal(result$diagnostics$repair_method,"local_final_grid_idw"); expect_true(is.finite(terra::values(result$raster,mat=FALSE)[target])); expect_equal(result$diagnostics$repair_count,1)
+})
