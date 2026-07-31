@@ -166,6 +166,8 @@ agera5_netcdf_driver_available <- function(drivers) {
   any(grepl("^netcdf$", as.character(d$name), ignore.case=TRUE) & as.logical(d$raster), na.rm=TRUE)
 }
 terra_has_netcdf_driver <- function() {
+  override <- getOption("cdsdatagrab.agera5_netcdf_driver_available", NULL)
+  if (!is.null(override)) return(isTRUE(override))
   if (!requireNamespace("terra", quietly=TRUE)) return(FALSE)
   d <- tryCatch(terra::gdal(drivers=TRUE), error=function(e) NULL)
   agera5_netcdf_driver_available(d)
@@ -312,6 +314,18 @@ agera5_update_member_manifest <- function(path, result) {
   if (!"processing_candidate" %in% names(m)) m$processing_candidate <- FALSE
   rd <- result$reader_diagnostics %||% list(); m$terra_readable[[i]] <- identical(result$reader_selected,"terra_gdal"); m$netcdf_gdal_driver_available[[i]] <- rd$netcdf_gdal_driver_available %||% NA; m$reader_attempted[[i]] <- paste(result$reader_attempted %||% NA_character_, collapse="+"); m$reader_selected[[i]] <- result$reader_selected %||% NA_character_; m$reader_selection_reason[[i]] <- rd$reader_selection_reason %||% NA_character_; m$selected_source_variable[[i]] <- result$selected_source_variable; m$source_units[[i]] <- result$source_units; m$source_date[[i]] <- result$date; m$processing_candidate[[i]] <- TRUE
   utils::write.csv(m, manifest_path, row.names=FALSE); invisible(TRUE)
+}
+build_agera5_member_date_map <- function(member_dates, member_hashes, readers=list()) {
+  if (!length(member_dates)) return(NULL)
+  do.call(rbind, lapply(names(member_dates), function(path) {
+    m <- tryCatch(utils::read.csv(file.path(dirname(path), "archive_manifest.csv"), stringsAsFactors=FALSE), error=function(e) NULL)
+    i <- if (!is.null(m) && nrow(m) && "extracted_path" %in% names(m)) which(normalizePath(m$extracted_path,winslash="/",mustWork=FALSE)==normalizePath(path,winslash="/",mustWork=FALSE))[1] else NA_integer_
+    row <- if (length(i) == 1L && !is.na(i)) m[i,,drop=FALSE] else NULL; reader <- readers[[path]] %||% list()
+    data.frame(date=format(member_dates[[path]],"%Y-%m-%d"), source_path=path,
+      archive_path=if(!is.null(row))row$archive_path[[1]]else NA_character_, archive_member=if(!is.null(row))row$member_name[[1]]else NA_character_,
+      request_hash=member_hashes[[path]]%||%NA_character_, selected_source_variable=reader$selected_netcdf_variable%||%NA_character_,
+      reader_selected=reader$reader_used%||%NA_character_, mapping_reason=if(!is.null(reader$reader_used))"validated extracted member"else"member validation failed", stringsAsFactors=FALSE)
+  }))
 }
 
 .download_cds_requests_before_archive_adapter <- download_cds_requests
