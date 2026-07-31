@@ -16,6 +16,21 @@ test_that("new submit wrappers use the shared sbatch path and isolated log patte
     expect_true(grepl("mkdir -p", script, fixed = TRUE))
   }
   expect_true(dir.exists(root))
+  expect_match(generic, "CDS_DATAGRAB_R_LIB")
+  expect_match(generic, "R_LIBS_USER")
+  expect_match(generic, "--export=ALL,CDS_DATAGRAB_ROOT")
+  runner <- paste(readLines(package_file("hpc", "run_era5_variable.slurm"), warn = FALSE), collapse = "\n")
+  expect_match(runner, "preflight_cdsdatagrab.R")
+  expect_match(runner, "CDS_DATAGRAB_R_LIB")
+  preflight <- paste(readLines(package_file("hpc", "preflight_cdsdatagrab.R"), warn = FALSE), collapse = "\n")
+  expect_match(preflight, "Actionable")
+  expect_match(preflight, "Installed cdsdatagrab commit differs from source checkout")
+  installer <- paste(readLines(package_file("hpc", "install_cdsdatagrab_atlas.sh"), warn = FALSE), collapse = "\n")
+  expect_match(installer, "CMD INSTALL --preclean --no-multiarch")
+  expect_match(installer, "find.package")
+  expect_match(installer, "packageVersion")
+  expect_match(installer, "installed-commit")
+  expect_match(installer, "\"\\$REPO_DIR\"")
 })
 
 test_that("AgERA5 request validation is shared by plan and execution", {

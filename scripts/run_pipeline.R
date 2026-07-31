@@ -1,6 +1,9 @@
 #!/usr/bin/env Rscript
 root <- normalizePath(getwd(), winslash="/")
-invisible(lapply(list.files(file.path(root,"R"), pattern="\\.R$", full.names=TRUE), source))
+if (!requireNamespace("cdsdatagrab", quietly=TRUE)) {
+  stop("The installed cdsdatagrab namespace is unavailable. Set CDS_DATAGRAB_R_LIB and run hpc/install_cdsdatagrab_atlas.sh before executing the worker.", call.=FALSE)
+}
+library(cdsdatagrab)
 parsed <- tryCatch(parse_pipeline_args(), error=function(e) { message("Fatal: ", conditionMessage(e)); quit(status=2) })
 execution <- tryCatch(resolve_execution_choice(parsed), error=function(e) { message("Fatal: ", conditionMessage(e)); quit(status=2) })
 if (isTRUE(parsed$verbose)) {
