@@ -160,6 +160,16 @@ select_agera5_archive_members <- function(manifest, request_dates) {
 }
 
 agera5_terra_aliases <- function() c("Derived_Relative_Humidity_2m_Min_24h", "derived_relative_humidity_2m_min_24h", "2m_relative_humidity_derived", "relative_humidity_2m_min")
+agera5_netcdf_driver_available <- function(drivers) {
+  if (is.null(drivers) || !nrow(as.data.frame(drivers)) || !all(c("name", "raster") %in% names(drivers))) return(FALSE)
+  d <- as.data.frame(drivers, stringsAsFactors=FALSE)
+  any(grepl("^netcdf$", as.character(d$name), ignore.case=TRUE) & as.logical(d$raster), na.rm=TRUE)
+}
+terra_has_netcdf_driver <- function() {
+  if (!requireNamespace("terra", quietly=TRUE)) return(FALSE)
+  d <- tryCatch(terra::gdal(drivers=TRUE), error=function(e) NULL)
+  agera5_netcdf_driver_available(d)
+}
 agera5_terra_variable <- function(r, variable_spec) {
   aliases <- unique(c(variable_spec$netcdf_variable_names, agera5_terra_aliases()))
   vn <- tryCatch(terra::varnames(r), error=function(e) character())
@@ -174,11 +184,74 @@ agera5_terra_variable <- function(r, variable_spec) {
   stop("AgERA5 terra reader found zero or multiple RH layers; varnames=", paste(vn, collapse=", "), names=", paste(nm, collapse=", "), expected aliases=", paste(aliases, collapse=", "), call.=FALSE)
 }
 
-read_agera5_daily_member <- function(path, expected_date, variable_spec, fallback_date=NULL) {
+agera5_nc_attribute <- function(nc, variable, attribute, default=NA) {
+  x <- tryCatch(ncdf4::ncatt_get(nc, variable, attribute), error=function(e) list(hasatt=FALSE))
+  if (!isTRUE(x$hasatt)) return(default)
+  x$value
+}
+agera5_coordinate_check <- function(x, name) {
+  x <- as.numeric(x)
+  if (!length(x) || any(!is.finite(x)) || anyDuplicated(x)) stop("AgERA5 ", name, " coordinate is empty, nonfinite, or duplicated", call.=FALSE)
+  o <- order(x); s <- x[o]; delta <- diff(s); step <- median(delta)
+  if (!length(delta) || any(delta <= 0) || !is.finite(step) || max(abs(delta-step)) > max(1e-8, abs(step)*1e-4)) stop("AgERA5 ", name, " coordinate is not strictly monotonic and regularly spaced", call.=FALSE)
+  if (abs(step-0.1) > 0.001) stop("AgERA5 ", name, " coordinate spacing is not approximately 0.1 degrees: ", step, call.=FALSE)
+  list(values=x, order=o, sorted=s, step=step, direction=if (x[[1]] < x[[length(x)]]) "ascending" else "descending", reordered=!identical(o, seq_along(x)))
+}
+agera5_result <- function(r, path, expected, selected, units, source_min, source_max, non_na, na_count, low, high, diagnostics, reader_selected, reader_attempted, reason) {
+  diagnostics$netcdf_gdal_driver_available <- diagnostics$netcdf_gdal_driver_available %||% NA
+  diagnostics$reader_attempted <- reader_attempted; diagnostics$reader_selected <- reader_selected; diagnostics$reader_selection_reason <- reason
+  list(raster=r, date=expected, selected_source_variable=selected, selected_netcdf_variable=selected,
+       source_units=units, source_crs="EPSG:4326", source_resolution=as.numeric(terra::res(r)),
+       source_extent=c(terra::xmin(terra::ext(r)),terra::xmax(terra::ext(r)),terra::ymin(terra::ext(r)),terra::ymax(terra::ext(r))),
+       source_minimum=source_min, source_maximum=source_max, source_non_na_count=non_na, source_na_count=na_count,
+       source_value_minimum=source_min, source_value_maximum=source_max,
+       clamped_low_count=low, clamped_high_count=high, date_source=diagnostics$date_source %||% "netcdf_time",
+       reader_selected=reader_selected, reader_attempted=reader_attempted, reader_diagnostics=diagnostics,
+       terra_names=diagnostics$terra_names %||% character(), terra_varnames=diagnostics$terra_varnames %||% character(),
+       terra_time=diagnostics$terra_time %||% character(), source_format="netcdf4_hdf5", reader_used=reader_selected,
+       selected_variable=selected, selected_variable_alias=selected, source_units_original=units,
+       source_units_normalized=normalize_source_units(units), output_units="percent", unit_conversion="identity",
+       dates=as.Date(expected), decoded_dates=as.POSIXct(expected,tz="UTC"), rasters=list(r),
+       daily_statistic_source="AgERA5_precomputed_derived_indicator", daily_statistic="24_hour_minimum", subdaily_frequency="daily")
+}
+
+read_agera5_daily_member_ncdf4 <- function(path, expected_date, filename_date=NULL, variable_spec, fallback_date=NULL, driver_available=FALSE, reader_attempted="ncdf4") {
+  if (!requireNamespace("ncdf4", quietly=TRUE)) stop("ncdf4 is required for AgERA5 members when GDAL has no NetCDF raster driver", call.=FALSE)
+  expected <- canonical_iso_dates(expected_date, "expected AgERA5 member date")
+  if (length(expected) != 1L) stop("AgERA5 daily member requires exactly one expected date", call.=FALSE)
+  nc <- ncdf4::nc_open(path); on.exit(ncdf4::nc_close(nc), add=TRUE)
+  md <- inspect_netcdf_ncdf4(path); selected <- resolve_netcdf_variable(md, variable_spec); v <- nc$var[[selected]]
+  dims <- vapply(v$dim, function(d) d$name, character(1)); raw_dims <- vapply(v$dim, function(d) d$len, numeric(1))
+  lon_name <- dims[grepl("^(lon|longitude)$", dims, ignore.case=TRUE)][1]; lat_name <- dims[grepl("^(lat|latitude)$", dims, ignore.case=TRUE)][1]; time_name <- dims[grepl("^(time|valid_time)$", dims, ignore.case=TRUE)][1]
+  if (anyNA(c(lon_name,lat_name,time_name)) || length(dims) != 3L || !identical(sort(raw_dims), sort(c(nc$dim[[lon_name]]$len,nc$dim[[lat_name]]$len,1)))) stop("AgERA5 variable must have lon, lat, and singleton time dimensions; dimensions=", paste(dims,collapse=","), " lengths=", paste(raw_dims,collapse="x"), call.=FALSE)
+  lon <- nc$dim[[lon_name]]$vals; lat <- nc$dim[[lat_name]]$vals; tm <- nc$dim[[time_name]]$vals
+  lc <- agera5_coordinate_check(lon,"longitude"); ac <- agera5_coordinate_check(lat,"latitude")
+  if (length(tm) != 1L) stop("AgERA5 member must have exactly one time coordinate", call.=FALSE)
+  time_units <- nc$dim[[time_name]]$units; calendar <- agera5_nc_attribute(nc,time_name,"calendar", "standard")
+  decoded <- tryCatch(as.Date(decode_netcdf_time(tm,time_units,calendar)), error=function(e) as.Date(NA))
+  date_source <- "netcdf_time"
+  source_date <- if (!is.na(decoded[[1]])) format(decoded[[1]],"%Y-%m-%d") else NA_character_
+  if (is.na(source_date) && !is.null(fallback_date)) { source_date <- canonical_iso_dates(fallback_date,"AgERA5 fallback date"); date_source <- "archive_validated_filename_content_fallback" }
+  if (is.na(source_date) || !identical(source_date,expected[[1]]) || (!is.null(filename_date) && !identical(source_date,canonical_iso_dates(filename_date,"filename date")[[1]]))) stop("AgERA5 member date mismatch; expected=",expected[[1]]," decoded=",source_date, call.=FALSE)
+  values <- ncdf4::ncvar_get(nc, selected, collapse_degen=FALSE, raw_datavals=FALSE); actual_dims <- dim(values)
+  if (length(actual_dims) != 3L || !identical(as.integer(actual_dims), as.integer(raw_dims))) stop("AgERA5 raw array dimensions do not preserve variable dimensions: expected ",paste(raw_dims,collapse="x")," observed ",paste(actual_dims,collapse="x"),call.=FALSE)
+  perm <- match(c(lon_name,lat_name,time_name),dims); values <- aperm(values,perm); lat_order <- order(lat, decreasing=TRUE); matrix_north_up <- t(values[lc$order,lat_order,1,drop=TRUE])
+  if (!identical(dim(matrix_north_up), c(length(lat),length(lon)))) stop("AgERA5 transformed matrix dimensions are incorrect",call.=FALSE)
+  dx <- lc$step; dy <- ac$step; ex <- terra::ext(min(lc$sorted)-dx/2,max(lc$sorted)+dx/2,min(ac$sorted)-dy/2,max(ac$sorted)+dy/2); r <- terra::rast(matrix_north_up,extent=ex,crs="EPSG:4326")
+  units <- as.character(v$units %||% agera5_nc_attribute(nc,selected,"units",NA_character_))[[1]]
+  if (!identical(normalize_source_units(units),"percent")) stop("AgERA5 ncdf4 member units are not percent: ",units,call.=FALSE)
+  finite <- is.finite(values); non_na <- sum(finite); na_count <- sum(!finite); source_min <- if(non_na)min(values[finite]) else NA_real_; source_max <- if(non_na)max(values[finite]) else NA_real_; tolerance <- 1e-6
+  if (!is.finite(source_min)||!is.finite(source_max)||source_min < -tolerance||source_max > 100+tolerance) stop("AgERA5 member has materially invalid relative-humidity values: ",source_min," to ",source_max,call.=FALSE)
+  low <- sum(values < 0,na.rm=TRUE); high <- sum(values > 100,na.rm=TRUE); if(low||high){matrix_north_up <- pmin(100,pmax(0,matrix_north_up)); terra::values(r) <- as.vector(t(matrix_north_up))}
+  diag <- list(netcdf_gdal_driver_available=driver_available, source_dimension_order=dims, raw_array_dimensions=raw_dims, longitude_direction=lc$direction, latitude_direction=ac$direction, longitude_reordered=lc$reordered, latitude_reordered=!identical(lat_order,seq_along(lat)), final_matrix_dimensions=dim(matrix_north_up), date_source=date_source, time_units=time_units, calendar=calendar, fill_value=v$missval, missing_value=agera5_nc_attribute(nc,selected,"missing_value",NA), scale_factor=agera5_nc_attribute(nc,selected,"scale_factor",1), add_offset=agera5_nc_attribute(nc,selected,"add_offset",0), coordinate_ranges=list(longitude=range(lon),latitude=range(lat)), source_minimum=source_min, source_maximum=source_max)
+  agera5_result(r,path,expected,selected,units,source_min,source_max,non_na,na_count,low,high,diag,"ncdf4",reader_attempted,"active GDAL runtime has no NetCDF raster driver" )
+}
+
+read_agera5_daily_member_terra <- function(path, expected_date, variable_spec, fallback_date=NULL, driver_available=TRUE, reader_attempted="terra") {
   if (!requireNamespace("terra", quietly=TRUE)) stop("terra is required for AgERA5 daily-member processing", call.=FALSE)
   expected <- canonical_iso_dates(expected_date, "expected AgERA5 member date")
   if (length(expected) != 1L) stop("AgERA5 daily member requires exactly one expected date", call.=FALSE)
-  r <- tryCatch(terra::rast(path), error=function(e) stop("terra could not open AgERA5 member ", path, ": ", conditionMessage(e), call.=FALSE))
+  r <- tryCatch(terra::rast(path), error=function(e) { class(e) <- c("agera5_terra_open_error", class(e)); stop(e) })
   if (terra::nlyr(r) < 1L) stop("AgERA5 member has no raster layers: ", path, call.=FALSE)
   selected <- agera5_terra_variable(r, variable_spec)
   if (terra::nlyr(r) != 1L) {
@@ -208,17 +281,18 @@ read_agera5_daily_member <- function(path, expected_date, variable_spec, fallbac
   if (source_min < 0 || source_max > 100) r <- terra::clamp(r, 0, 100, values=TRUE)
   non_na <- as.numeric(terra::global(!is.na(r), "sum", na.rm=FALSE)[1,1])
   if (!is.finite(non_na) || non_na < 1) stop("AgERA5 member contains no usable values: ", path, call.=FALSE)
-  list(raster=r, date=source_date, selected_source_variable=selected, selected_netcdf_variable=selected,
-       source_units=units, source_crs=crs, source_resolution=as.numeric(resolution), source_extent=c(terra::xmin(ext), terra::xmax(ext), terra::ymin(ext), terra::ymax(ext)),
-       source_minimum=source_min, source_maximum=source_max, source_non_na_count=non_na,
-       clamped_low_count=below, clamped_high_count=above, date_source=date_source,
-       terra_names=as.character(terra::names(r)), terra_varnames=as.character(terra::varnames(r)),
-       terra_time=if (is.null(source_time)) character() else as.character(source_time), source_format="netcdf4_hdf5",
-       reader_used="terra", selected_variable=selected, selected_variable_alias=selected,
-       source_units_original=units, source_units_normalized=normalize_source_units(units), output_units=variable_spec$output_units,
-       unit_conversion=variable_spec$unit_conversion, dates=as.Date(source_date), decoded_dates=as.POSIXct(source_date, tz="UTC"),
-       rasters=list(r), daily_statistic_source="AgERA5_precomputed_derived_indicator", daily_statistic=variable_spec$daily_statistic,
-       subdaily_frequency=variable_spec$frequency)
+  agera5_result(r,path,expected,selected,units,source_min,source_max,non_na,sum(is.na(terra::values(r,mat=FALSE))),below,above,list(netcdf_gdal_driver_available=driver_available,terra_names=as.character(terra::names(r)),terra_varnames=as.character(terra::varnames(r)),terra_time=if(is.null(source_time))character()else as.character(source_time),date_source=date_source,source_minimum=source_min,source_maximum=source_max),"terra_gdal",reader_attempted,"active GDAL runtime provides a NetCDF raster driver")
+}
+
+read_agera5_daily_member <- function(path, expected_date, variable_spec, fallback_date=NULL, filename_date=NULL) {
+  driver_available <- terra_has_netcdf_driver()
+  if (isTRUE(driver_available)) {
+    terra_result <- tryCatch(read_agera5_daily_member_terra(path,expected_date,variable_spec,fallback_date,driver_available,"terra"), error=function(e)e)
+    if (!inherits(terra_result,"error")) return(terra_result)
+    if (!inherits(terra_result,"agera5_terra_open_error")) stop(terra_result)
+    return(read_agera5_daily_member_ncdf4(path,expected_date,filename_date %||% archive_member_date(path),variable_spec,fallback_date,driver_available,"terra -> ncdf4"))
+  }
+  read_agera5_daily_member_ncdf4(path,expected_date,filename_date %||% archive_member_date(path),variable_spec,fallback_date,FALSE,"ncdf4")
 }
 agera5_update_member_manifest <- function(path, result) {
   manifest_path <- file.path(dirname(path), "archive_manifest.csv")
@@ -228,11 +302,15 @@ agera5_update_member_manifest <- function(path, result) {
   i <- which(normalizePath(m$extracted_path, winslash="/", mustWork=FALSE) == normalizePath(path, winslash="/", mustWork=FALSE))
   if (length(i) != 1L) return(invisible(FALSE))
   if (!"terra_readable" %in% names(m)) m$terra_readable <- FALSE
+  if (!"netcdf_gdal_driver_available" %in% names(m)) m$netcdf_gdal_driver_available <- NA
+  if (!"reader_attempted" %in% names(m)) m$reader_attempted <- NA_character_
+  if (!"reader_selected" %in% names(m)) m$reader_selected <- NA_character_
+  if (!"reader_selection_reason" %in% names(m)) m$reader_selection_reason <- NA_character_
   if (!"selected_source_variable" %in% names(m)) m$selected_source_variable <- NA_character_
   if (!"source_units" %in% names(m)) m$source_units <- NA_character_
   if (!"source_date" %in% names(m)) m$source_date <- NA_character_
   if (!"processing_candidate" %in% names(m)) m$processing_candidate <- FALSE
-  m$terra_readable[[i]] <- TRUE; m$selected_source_variable[[i]] <- result$selected_source_variable; m$source_units[[i]] <- result$source_units; m$source_date[[i]] <- result$date; m$processing_candidate[[i]] <- TRUE
+  rd <- result$reader_diagnostics %||% list(); m$terra_readable[[i]] <- identical(result$reader_selected,"terra_gdal"); m$netcdf_gdal_driver_available[[i]] <- rd$netcdf_gdal_driver_available %||% NA; m$reader_attempted[[i]] <- paste(result$reader_attempted %||% NA_character_, collapse="+"); m$reader_selected[[i]] <- result$reader_selected %||% NA_character_; m$reader_selection_reason[[i]] <- rd$reader_selection_reason %||% NA_character_; m$selected_source_variable[[i]] <- result$selected_source_variable; m$source_units[[i]] <- result$source_units; m$source_date[[i]] <- result$date; m$processing_candidate[[i]] <- TRUE
   utils::write.csv(m, manifest_path, row.names=FALSE); invisible(TRUE)
 }
 
@@ -285,5 +363,5 @@ read_era5_daily_layers <- function(path, expected_dates=NULL, variable_spec=NULL
   manifest$source_date[match(chosen$member_name, manifest$member_name)] <- vapply(pieces, `[[`, character(1), "date")
   manifest$processing_candidate[match(chosen$member_name, manifest$member_name)] <- TRUE
   utils::write.csv(manifest, file.path(dirname(chosen$extracted_path[[1]]), "archive_manifest.csv"), row.names=FALSE)
-  list(rasters=unlist(lapply(pieces, `[[`, "rasters"), recursive=FALSE), dates=as.Date(vapply(pieces, `[[`, character(1), "date")), decoded_dates=as.POSIXct(vapply(pieces, `[[`, character(1), "date"), tz="UTC"), reader_used="terra", source_format="zip", selected_variable=vapply(pieces, `[[`, character(1), "selected_variable"), selected_netcdf_variable=vapply(pieces, `[[`, character(1), "selected_netcdf_variable"), selected_variable_alias=vapply(pieces, `[[`, character(1), "selected_variable_alias"), source_units=spec$source_units, source_units_original=spec$source_units, source_units_normalized=spec$source_units, output_units=spec$output_units, unit_conversion=spec$unit_conversion, source_value_minimum=min(vapply(pieces,function(x)x$source_minimum,numeric(1))), source_value_maximum=max(vapply(pieces,function(x)x$source_maximum,numeric(1))), daily_statistic_source="AgERA5_precomputed_derived_indicator", daily_statistic=spec$daily_statistic, subdaily_frequency=spec$frequency)
+  list(rasters=unlist(lapply(pieces, `[[`, "rasters"), recursive=FALSE), dates=as.Date(vapply(pieces, `[[`, character(1), "date")), decoded_dates=as.POSIXct(vapply(pieces, `[[`, character(1), "date"), tz="UTC"), reader_used=paste(unique(vapply(pieces, `[[`, character(1), "reader_selected")),collapse="+"), source_format="zip", selected_variable=vapply(pieces, `[[`, character(1), "selected_variable"), selected_netcdf_variable=vapply(pieces, `[[`, character(1), "selected_netcdf_variable"), selected_variable_alias=vapply(pieces, `[[`, character(1), "selected_variable_alias"), source_units=spec$source_units, source_units_original=spec$source_units, source_units_normalized=spec$source_units, output_units=spec$output_units, unit_conversion=spec$unit_conversion, source_value_minimum=min(vapply(pieces,function(x)x$source_minimum,numeric(1))), source_value_maximum=max(vapply(pieces,function(x)x$source_maximum,numeric(1))), reader_diagnostics=lapply(pieces, `[[`, "reader_diagnostics"), daily_statistic_source="AgERA5_precomputed_derived_indicator", daily_statistic=spec$daily_statistic, subdaily_frequency=spec$frequency)
 }

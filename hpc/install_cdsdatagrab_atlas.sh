@@ -14,8 +14,9 @@ git -C "$REPO_DIR" rev-parse --show-toplevel >/dev/null 2>&1 || { echo "Reposito
 SOURCE_COMMIT=$(git -C "$REPO_DIR" rev-parse HEAD)
 mkdir -p "$CDS_DATAGRAB_R_LIB"
 echo "Installing cdsdatagrab commit $SOURCE_COMMIT from $REPO_DIR into $CDS_DATAGRAB_R_LIB"
-R_LIBS_USER="$CDS_DATAGRAB_R_LIB" "$R_BIN" CMD INSTALL --preclean --no-multiarch --library="$CDS_DATAGRAB_R_LIB" "$REPO_DIR"
-export R_LIBS_USER="$CDS_DATAGRAB_R_LIB"
+case ":${R_LIBS_USER:-}:" in *":$CDS_DATAGRAB_R_LIB:"*) ;; "::") R_LIBS_USER="$CDS_DATAGRAB_R_LIB" ;; *) R_LIBS_USER="$CDS_DATAGRAB_R_LIB:${R_LIBS_USER}" ;; esac
+export R_LIBS_USER R_LIBS_SITE="${R_LIBS_SITE:-}"
+"$R_BIN" CMD INSTALL --preclean --no-multiarch --library="$CDS_DATAGRAB_R_LIB" "$REPO_DIR"
 INSTALLED_PATH=$("$Rscript_BIN" -e 'if (!requireNamespace("cdsdatagrab", quietly=TRUE)) stop("cdsdatagrab namespace failed to load"); cat(find.package("cdsdatagrab"))')
 PACKAGE_VERSION=$("$Rscript_BIN" -e 'cat(as.character(packageVersion("cdsdatagrab")))')
 MARKER="$CDS_DATAGRAB_R_LIB/.cds-datagrab-installed-commit"

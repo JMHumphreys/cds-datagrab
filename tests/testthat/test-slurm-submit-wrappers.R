@@ -14,11 +14,16 @@ test_that("new submit wrappers use the shared sbatch path and isolated log patte
     expect_match(script, paste0("cds_", item$ext, "_%j\\.out"))
     expect_match(script, paste0("cds_", item$ext, "_%j\\.err"))
     expect_true(grepl("mkdir -p", script, fixed = TRUE))
+    expect_match(script, "BASH_SOURCE")
+    expect_true(grepl('bash "$REPO_DIR/hpc/submit_era5_variable.sh"', script, fixed=TRUE))
   }
   expect_true(dir.exists(root))
   expect_match(generic, "CDS_DATAGRAB_R_LIB")
   expect_match(generic, "R_LIBS_USER")
   expect_match(generic, "--export=ALL,CDS_DATAGRAB_ROOT")
+  expect_match(generic, "R_LIBS_SITE")
+  expect_match(generic, "BASH_SOURCE")
+  expect_true(grepl('bash "$SBATCH_SCRIPT"', generic, fixed=TRUE))
   runner <- paste(readLines(package_file("hpc", "run_era5_variable.slurm"), warn = FALSE), collapse = "\n")
   expect_match(runner, "preflight_cdsdatagrab.R")
   expect_match(runner, "CDS_DATAGRAB_R_LIB")
@@ -30,7 +35,8 @@ test_that("new submit wrappers use the shared sbatch path and isolated log patte
   expect_match(installer, "find.package")
   expect_match(installer, "packageVersion")
   expect_match(installer, "installed-commit")
-  expect_match(installer, "\"\\$REPO_DIR\"")
+  expect_true(grepl('"$REPO_DIR"', installer, fixed=TRUE))
+  expect_match(installer, "R_LIBS_SITE")
 })
 
 test_that("AgERA5 request validation is shared by plan and execution", {

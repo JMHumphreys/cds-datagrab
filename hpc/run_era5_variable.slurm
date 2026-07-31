@@ -13,8 +13,9 @@ REPO_DIR="${REPO_DIR:-${SLURM_SUBMIT_DIR}}"
 CONFIG="${CONFIG:?CONFIG must be set}"; MODE="${MODE:-plan}"; DRY_RUN="${DRY_RUN:-true}"; OBSERVED_END="${OBSERVED_END:-auto}"; FUTURE_END="${FUTURE_END:-}"
 CDS_DATAGRAB_ROOT="${CDS_DATAGRAB_ROOT:?CDS_DATAGRAB_ROOT must be set}"
 CDS_DATAGRAB_R_LIB="${CDS_DATAGRAB_R_LIB:?CDS_DATAGRAB_R_LIB must point to the external installed cdsdatagrab library}"
-R_LIBS_USER="$CDS_DATAGRAB_R_LIB"
-export CDS_DATAGRAB_R_LIB R_LIBS_USER
+case ":${R_LIBS_USER:-}:" in *":$CDS_DATAGRAB_R_LIB:"*) ;; "::") R_LIBS_USER="$CDS_DATAGRAB_R_LIB" ;; *) R_LIBS_USER="$CDS_DATAGRAB_R_LIB:${R_LIBS_USER}" ;; esac
+R_LIBS_SITE="${R_LIBS_SITE:-}"
+export CDS_DATAGRAB_R_LIB R_LIBS_USER R_LIBS_SITE
 case "${DRY_RUN,,}" in true|1|yes) EXECUTION_FLAG="--dry-run" ;; false|0|no) EXECUTION_FLAG="--execute" ;; *) echo "DRY_RUN must be true or false; received: ${DRY_RUN}" >&2; exit 2 ;; esac
 cd "$REPO_DIR"
 hostname; date; git status --short || true; git rev-parse HEAD || true; module list 2>&1; R --version
