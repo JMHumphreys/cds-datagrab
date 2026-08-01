@@ -41,3 +41,17 @@ CDS_DATAGRAB_ROOT=/project/disease_ecology/cds-datagrab-relhum-min-smoke-output 
 ```
 
 Use `/project/disease_ecology/cds-datagrab-lai-low-weekly-smoke-output` and `/project/disease_ecology/cds-datagrab-relhum-min-weekly-smoke-output` for weekly smoke output, and `/project/disease_ecology/cds-datagrab-lai-low-production-output` and `/project/disease_ecology/cds-datagrab-relhum-min-production-output` for persistent production output.
+
+Production environmental workflows use the canonical configured window 2022-01-01 through 2026-12-31. Run one calendar year at a time with `START_DATE` and `END_DATE`, reusing the same variable-specific production root. Valid raw, daily, and weekly products are reused on later annual runs. Observed requests stop at the configured product-availability date; any remaining 2026 period is recorded as future/estimated and is not submitted to CDS. Boundary ISO weeks are never completed with out-of-window dates and require seven in-range daily rasters.
+
+For example, the first annual executions are:
+
+```bash
+export CDS_DATAGRAB_ROOT=/project/disease_ecology/cds-datagrab-lai-low-production-output
+START_DATE=2022-01-01 END_DATE=2022-12-31 CONFIG=config/era5_lai_low_production.yml MODE=full DRY_RUN=false bash hpc/submit_era5_lai_low.sh
+
+export CDS_DATAGRAB_ROOT=/project/disease_ecology/cds-datagrab-relhum-min-production-output
+START_DATE=2022-01-01 END_DATE=2022-12-31 CONFIG=config/agera5_relhum_min_production.yml MODE=full DRY_RUN=false bash hpc/submit_agera5_relhum_min.sh
+```
+
+Dry-run planning may cover the complete 2022-2026 configured range. Production execution spanning multiple calendar years requires `ALLOW_MULTIYEAR=true`; annual execution is the recommended default.

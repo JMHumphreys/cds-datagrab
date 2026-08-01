@@ -31,9 +31,11 @@ paths:
 temporal:
   initial_start_date: '2022-01-01'
   observed_end: '2026-07-12'
+  configured_start_date: '2022-01-01'
+  configured_end_date: '2026-12-31'
   source_lag_days: 0
   overlap_days: 0
-  future_end_date: '2026-07-12'
+  future_end_date: '2026-12-31'
 cds:
   dataset_short_name: derived-era5-single-levels-daily-statistics
   product_type: reanalysis

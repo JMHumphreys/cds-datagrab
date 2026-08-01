@@ -108,4 +108,35 @@ validate_pipeline_config <- function(config) {
   config
 }
 
+resolve_pipeline_date_window <- function(config, start_date=NULL, end_date=NULL, dry_run=FALSE) {
+  temporal <- config$temporal
+  configured_start <- as.Date(temporal$configured_start_date %||% temporal$initial_start_date)
+  configured_end <- as.Date(temporal$configured_end_date %||% temporal$future_end_date %||% temporal$observed_end)
+  observed_end <- if (identical(temporal$observed_end, "auto")) Sys.Date() - as.integer(temporal$source_lag_days %||% 0L) else as.Date(temporal$observed_end)
+  requested_start <- as.Date(start_date %||% configured_start)
+  requested_end <- as.Date(end_date %||% configured_end)
+  if (anyNA(c(configured_start, configured_end, observed_end, requested_start, requested_end))) stop("Invalid production date window", call.=FALSE)
+  if (requested_start > requested_end) stop("Effective date window start must not be after end", call.=FALSE)
+  if (requested_start < configured_start || requested_end > configured_end) stop("Date override must remain within configured production window ", format(configured_start), " through ", format(configured_end), call.=FALSE)
+  if (!isTRUE(dry_run) && identical(as.character(config$project$profile), "production") && requested_start <= observed_end) effective_end <- min(requested_end, observed_end) else effective_end <- requested_end
+  effective_start <- requested_start
+  future_start <- if (requested_end > observed_end) max(requested_start, observed_end + 1L) else as.Date(NA)
+  list(configured_start=configured_start, configured_end=configured_end, requested_start=requested_start, requested_end=requested_end, effective_start=effective_start, effective_end=effective_end, observed_start=configured_start, observed_end=observed_end, future_start=future_start, future_end=if (requested_end > observed_end) requested_end else as.Date(NA), date_override_source=if (!is.null(start_date) || !is.null(end_date)) "explicit_override" else "configured")
+}
+
+validate_plan <- function(plan, requests, window, config, spatial_diagnostics=NULL) {
+  dates <- sort(unique(as.Date(plan$date)))
+  expected <- if (length(requests)) safe_date_sequence(window$effective_start, window$effective_end) else dates
+  if (length(dates) != length(plan$date) || anyDuplicated(dates)) stop("Plan validation failed: planned dates are not unique", call.=FALSE)
+  if (length(dates) && (!all(dates >= window$effective_start) || !all(dates <= window$effective_end))) stop("Plan validation failed: planned dates are outside the requested window", call.=FALSE)
+  if (!identical(as.character(dates), as.character(expected))) stop("Plan validation failed: planned dates do not cover the effective window", call.=FALSE)
+  targets <- if (length(requests)) vapply(requests, function(x) as.character(x$target), character(1)) else character()
+  hashes <- if (length(requests)) vapply(requests, function(x) as.character(x$request_hash), character(1)) else character()
+  if (anyDuplicated(targets) || anyDuplicated(hashes)) stop("Plan validation failed: request targets and hashes must be unique", call.=FALSE)
+  covered <- if (length(requests)) sort(unique(as.Date(unlist(lapply(requests, function(x) x$raw_request_dates))))) else as.Date(character())
+  if (!identical(as.character(covered), as.character(expected))) stop("Plan validation failed: request rows do not cover all planned dates", call.=FALSE)
+  if (length(requests)) for (request in requests) if (length(unique(format(as.Date(request$raw_request_dates), "%Y-%m"))) != 1L) stop("Plan validation failed: request row crosses a month", call.=FALSE)
+  list(status="success", planned_dates=length(dates), request_rows=length(requests), uncovered_dates=length(setdiff(expected, covered)), duplicate_dates=length(plan$date)-length(dates), duplicate_request_targets=sum(duplicated(targets)), duplicate_request_hashes=sum(duplicated(hashes)), template_sha256=spatial_diagnostics$template_file_sha256 %||% NA_character_)
+}
+
 ensure_pipeline_directories <- function(config, output_root = NULL) { validate_pipeline_config(config); resolve_storage_paths(config, config$project_root %||% resolve_project_root(), output_root, create = TRUE) }

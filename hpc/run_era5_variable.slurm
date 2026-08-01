@@ -10,7 +10,7 @@ set -euo pipefail
 module purge
 module load r/4.5 udunits gdal proj geos
 REPO_DIR="${REPO_DIR:-${SLURM_SUBMIT_DIR}}"
-CONFIG="${CONFIG:?CONFIG must be set}"; MODE="${MODE:-plan}"; DRY_RUN="${DRY_RUN:-true}"; OBSERVED_END="${OBSERVED_END:-auto}"; FUTURE_END="${FUTURE_END:-}"
+CONFIG="${CONFIG:?CONFIG must be set}"; MODE="${MODE:-plan}"; DRY_RUN="${DRY_RUN:-true}"; OBSERVED_END="${OBSERVED_END:-auto}"; FUTURE_END="${FUTURE_END:-}"; START_DATE="${START_DATE:-}"; END_DATE="${END_DATE:-}"
 CDS_DATAGRAB_ROOT="${CDS_DATAGRAB_ROOT:?CDS_DATAGRAB_ROOT must be set}"
 CDS_DATAGRAB_R_LIB="${CDS_DATAGRAB_R_LIB:?CDS_DATAGRAB_R_LIB must point to the external installed cdsdatagrab library}"
 case ":${R_LIBS_USER:-}:" in *":$CDS_DATAGRAB_R_LIB:"*) ;; "::") R_LIBS_USER="$CDS_DATAGRAB_R_LIB" ;; *) R_LIBS_USER="$CDS_DATAGRAB_R_LIB:${R_LIBS_USER}" ;; esac
@@ -24,4 +24,6 @@ Rscript scripts/check_dependencies.R --mode "$MODE"
 args=(scripts/run_pipeline.R --config "$CONFIG" --mode "$MODE" --output-root "$CDS_DATAGRAB_ROOT" "$EXECUTION_FLAG")
 if [[ "$OBSERVED_END" != "auto" ]]; then args+=(--observed-end "$OBSERVED_END"); fi
 if [[ -n "$FUTURE_END" ]]; then args+=(--future-end "$FUTURE_END"); fi
+if [[ -n "$START_DATE" ]]; then args+=(--start-date "$START_DATE"); fi
+if [[ -n "$END_DATE" ]]; then args+=(--end-date "$END_DATE"); fi
 printf 'Rscript'; printf ' %q' "${args[@]}"; printf '\n'; echo "CDS token validation will occur inside R."; Rscript "${args[@]}"
