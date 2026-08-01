@@ -106,7 +106,7 @@ extract_agera5_archive <- function(archive_path, extracted_root, request_hash, v
   utils::unzip(archive_path, exdir=partial, overwrite=FALSE)
   extracted <- file.path(partial, members)
   if (any(!file.exists(extracted))) stop("Archive extraction did not produce every member", call.=FALSE)
-  nc <- grepl("\\.nc4?$", members, ignore.case=TRUE)
+  nc <- grepl("\\.(nc|netcdf)$", members, ignore.case=TRUE)
   fp <- agera5_manifest_fingerprints(variable_spec, checksum)
   rows <- lapply(seq_along(members), function(i) {
     p <- extracted[[i]]; fmt <- detect_download_format(p); d <- archive_member_date(members[[i]])
