@@ -23,9 +23,22 @@ config/local*.yaml
 logs/*.out
 logs/*.err
 logs/
+slurm-*.out
+slurm-*.err
+cds_lai_low_*.out
+cds_lai_low_*.err
+cds_relhum_min_*.out
+cds_relhum_min_*.err
 pipeline_runs/
 # secrets
 secrets.yaml
 
 # local data
 /local
+.Rcheck/
+*.Rcheck/
+*.tar.gz
+.r_lib/
+*.tif
+*.tif.aux.xml
+*.Rout

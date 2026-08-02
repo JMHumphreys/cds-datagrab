@@ -7,6 +7,8 @@ build_pipeline_option_parser <- function() {
     optparse::make_option("--execute", dest="execute", action="store_true", default=FALSE, help="Permit network requests and generated-data writes."),
     optparse::make_option("--observed-end", dest="observed_end", type="character"),
     optparse::make_option("--future-end", dest="future_end", type="character"),
+    optparse::make_option("--start-date", dest="start_date", type="character"),
+    optparse::make_option("--end-date", dest="end_date", type="character"),
     optparse::make_option("--output-root", dest="output_root", type="character"),
     optparse::make_option("--overwrite", dest="overwrite", action="store_true", default=FALSE),
     optparse::make_option("--rebuild-all-weeks", dest="rebuild_all_weeks", action="store_true", default=FALSE),
@@ -16,12 +18,13 @@ build_pipeline_option_parser <- function() {
 parse_pipeline_args <- function(args = commandArgs(trailingOnly = TRUE)) {
   parser <- build_pipeline_option_parser()
   if (is.null(parser)) {
-    x <- list(config="config/era5_mintemp.yml",mode="plan",dry_run=FALSE,execute=FALSE,observed_end=NULL,future_end=NULL,output_root=NULL,overwrite=FALSE,rebuild_all_weeks=FALSE,verbose=FALSE); i <- 1L
+    x <- list(config="config/era5_mintemp.yml",mode="plan",dry_run=FALSE,execute=FALSE,observed_end=NULL,future_end=NULL,start_date=NULL,end_date=NULL,output_root=NULL,overwrite=FALSE,rebuild_all_weeks=FALSE,verbose=FALSE); i <- 1L
     while(i <= length(args)) { a <- args[[i]]; key <- sub("^--", "", a); if(key %in% c("dry-run","execute","overwrite","rebuild-all-weeks","verbose")) x[[gsub("-","_",key)]] <- TRUE else { if(!startsWith(a,"--") || i==length(args)) stop("Invalid option: ",a,call.=FALSE); i <- i+1L; x[[gsub("-","_",key)]] <- args[[i]] }; i <- i+1L }
   } else { parsed <- optparse::parse_args(parser, args=args, positional_arguments=TRUE); x <- parsed$options; if (length(parsed$args)) stop("Unexpected trailing arguments: ", paste(parsed$args, collapse=" "), call.=FALSE) }
   for (n in c("dry_run","execute","overwrite","rebuild_all_weeks")) if (!is.logical(x[[n]]) || length(x[[n]])!=1L || is.na(x[[n]])) stop("--", n, " did not parse as a scalar logical.",call.=FALSE)
   if (!x$mode %in% c("diagnose","plan","download","process","aggregate","estimate","full")) stop("Invalid pipeline mode: ",x$mode,call.=FALSE)
   for (n in c("observed_end","future_end")) if (!is.null(x[[n]])) { z<-tryCatch(as.Date(x[[n]]),error=function(e)as.Date(NA)); if(is.na(z)) stop("Invalid date for --",n,call.=FALSE); x[[n]]<-as.character(z) }
+  for (n in c("start_date","end_date")) if (!is.null(x[[n]])) { z<-tryCatch(as.Date(x[[n]], format="%Y-%m-%d"),error=function(e)as.Date(NA)); if(is.na(z) || !identical(as.character(z), x[[n]])) stop("Invalid ISO date for --",n,call.=FALSE); x[[n]]<-as.character(z) }
   x
 }
 resolve_execution_choice <- function(parsed) { dry_run_requested <- isTRUE(parsed$dry_run); execute_requested <- isTRUE(parsed$execute); if (dry_run_requested && execute_requested) stop("Use only one of --dry-run or --execute.",call.=FALSE); list(dry_run=!execute_requested, execute=execute_requested, source=if(execute_requested) "--execute" else if(dry_run_requested) "--dry-run" else "default") }

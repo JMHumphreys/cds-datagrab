@@ -8,6 +8,8 @@ CONFIG="${CONFIG:-config/era5_mintemp_production.yml}"
 MODE="${MODE:-full}"
 DRY_RUN="${DRY_RUN:-false}"
 OBSERVED_END="${OBSERVED_END:-}"
+START_DATE="${START_DATE:-}"
+END_DATE="${END_DATE:-}"
 
 [[ "$PROFILE" == production ]] || { echo "PROFILE must be production" >&2; exit 2; }
 [[ -n "$OBSERVED_END" ]] || { echo "OBSERVED_END is required for production submissions" >&2; exit 2; }
@@ -31,5 +33,5 @@ fi
 
 # The shared wrapper owns submission and pipeline logic; this wrapper only supplies
 # production defaults and validates the explicit endpoint/root contract.
-export REPO_DIR CDS_DATAGRAB_ROOT PROFILE CONFIG MODE DRY_RUN OBSERVED_END
+export REPO_DIR CDS_DATAGRAB_ROOT PROFILE CONFIG MODE DRY_RUN OBSERVED_END START_DATE END_DATE
 exec "$REPO_DIR/hpc/submit_era5_mintemp.sh"

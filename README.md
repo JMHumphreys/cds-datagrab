@@ -1,28 +1,104 @@
-# cdsdatagrab
+# cds-datagrab
 
-`cdsdatagrab` is a configuration-driven R pipeline for ERA5 daily minimum 2-m temperature. It requests `2m_temperature` with the CDS `daily_minimum` statistic from 6-hourly samples, converts kelvin to degrees Celsius, projects directly to the protected `spatial_domain/study_area_raster.tif` geometry, and aggregates complete ISO weeks with a cellwise minimum.
+`cds-datagrab` is a reproducible R-package workflow for retrieving environmental data from the Copernicus Climate Data Store (CDS), aligning source data to the protected study-area template, writing daily GeoTIFFs, and aggregating complete ISO weeks.
 
-Observed files use `mintemp_YYYY-MM-DD.tif` and `mintemp_YYYY-Www.tif`; future climatological analogs use `_est`. Estimated files are excluded from observed coverage, weekly aggregation, and climatological donors. The weekly output requires all seven Monday-through-Sunday observed days.
+The workflow keeps raw CDS responses, extracted source files, template-aligned daily rasters, weekly rasters, inventories, run manifests, and Slurm logs separate. Raw and derived products are resumable and are never written into the Git checkout.
 
-Run `Rscript scripts/run_pipeline.R --mode diagnose` or a reproducible dry plan with `--mode plan --observed-end 2026-07-20`. Local output defaults to `runtime/cds-datagrab`; Atlas output defaults to `/project/disease_ecology/cds-datagrab` through `CDS_DATAGRAB_ROOT`. CLI precedence is `--output-root`, `CDS_DATAGRAB_ROOT`, configuration `paths.root`, then the local default. `--dry-run` and `--execute` are presence-only flags; neither flag means safe dry-run. Credentials are handled by `ecmwfr`; set `ecmwfr_PAT` securely after accepting applicable CDS dataset terms, and never put tokens in YAML or manifests.
+## Supported products
 
-The official Atlas entry point is `hpc/submit_era5_mintemp.sh`, which places SLURM logs under the dedicated root. Each profile has isolated `data/<profile>/era5_mintemp/{raw,extracted,daily,weekly,temp,cache}`, `runs/<profile>/era5_mintemp/<run_id>`, and pipeline-log directories. Each root has a `.cds-datagrab-root` ownership marker; destructive operations must validate it. Failed runs can be resumed because existing nonempty raw targets are skipped and valid outputs are preserved.
+| Product | CDS dataset / variable | Source → output units | Daily meaning | Weekly rule | Production configuration / wrapper |
+|---|---|---|---|---|---|
+| ERA5 minimum temperature | `derived-era5-single-levels-daily-statistics` / `2m_temperature` | K → °C | CDS daily minimum from 6-hourly data | cellwise minimum of 7 observed days | `config/era5_mintemp_production.yml` / `hpc/submit_era5_mintemp.sh` |
+| ERA5 soil moisture | `derived-era5-single-levels-daily-statistics` / `volumetric_soil_water_layer_1` | m³ m⁻³ → m³ m⁻³ | CDS daily mean, layer 1 | cellwise mean of 7 observed days | `config/era5_soilmoist_production.yml` / `hpc/submit_era5_soilmoist.sh` |
+| ERA5 low-vegetation LAI | `reanalysis-era5-single-levels` / `leaf_area_index_low_vegetation` (`lai_lv`) | m² m⁻² (dimensionless source accepted) → m² m⁻² | 00:00 UTC monthly-climatology observation | cellwise mean of 7 observed days | `config/era5_lai_low_production.yml` / `hpc/submit_era5_lai_low.sh` |
+| AgERA5 minimum RH | `sis-agrometeorological-indicators` / `2m_relative_humidity_derived` | % → % | precomputed 24-hour local-time minimum | cellwise mean of 7 observed days | `config/agera5_relhum_min_production.yml` / `hpc/submit_agera5_relhum_min.sh` |
 
-The original template lacked CRS metadata; the user replaced it with a correctly georeferenced Albers equal-area raster using WGS84 and kilometer coordinates (approximately 25-km cells). No coordinate scaling or CRS repair is required. The template defines both target geometry and the raster analysis mask; the GPKG defines the geographic request extent. Ordinary execution validates but never modifies either spatial file. The first real CDS execution should be the three-day smoke download, which must be inspected before any historical production update.
+ERA5 direct NetCDF is read with `ncdf4`; AgERA5 ZIP members are safely extracted and read with the same backend when Atlas GDAL cannot open NetCDF. See [the output reference](docs/output_schema.md) for field-level provenance.
 
-After reviewing the smoke plan, the documented first execution is:
+## Production period and annual execution
+
+The canonical configured range is **2022-01-01 through 2026-12-31**. Production execution is one calendar year at a time using the same product-specific output root. The configured horizon is not the same as the effective observed-data endpoint: unavailable future dates are recorded as future/unavailable and are not submitted to CDS.
+
+Annual windows may narrow, but never expand, the configured range. A non-dry-run window spanning multiple years is rejected unless `ALLOW_MULTIYEAR=true`; annual execution is the safe default. The first and final boundary ISO weeks are not fabricated: weekly products require seven in-range daily rasters.
+
+## Atlas installation and prerequisites
+
+Tested Atlas setup:
 
 ```bash
-Rscript scripts/run_pipeline.R --config config/era5_mintemp_smoke.yml --mode download --execute
+module purge
+module load r/4.5 udunits gdal proj geos git
+export CDS_DATAGRAB_R_LIB=/project/disease_ecology/cds-datagrab-r-library/4.5
+export HOME_R_LIB=/home/john.humphreys/R/x86_64-pc-linux-gnu-library/4.5
+export R_LIBS_USER="${CDS_DATAGRAB_R_LIB}:${HOME_R_LIB}"
+unset R_LIBS_SITE
 ```
 
-Inspect a downloaded target without modifying it with `Rscript scripts/inspect_smoke_download.R <path>`.
+Required package dependencies are listed in `DESCRIPTION`; the runtime preflight additionally verifies `terra`, `sf`, `ISOweek`, `ncdf4`, and `ecmwfr` where required. Install the package outside the checkout:
 
-CDS returns a valid NetCDF4/HDF5 file for the smoke request. Atlas GDAL may not open that file as a raster, so `ncdf4` is the primary raw-data reader; `terra` remains the projection, masking, validation, and GeoTIFF-writing engine. The `number` variable is ignored and `t2m` is selected explicitly. Direct NetCDF files do not need archive extraction, so `extracted/` may remain empty. Processing is resumable from the existing raw file.
-## ERA5 spatial coverage
+```bash
+export REPO_DIR=/project/disease_ecology/cds-datagrab
+bash hpc/install_cdsdatagrab_atlas.sh "$REPO_DIR"
+REPO_DIR="$REPO_DIR" Rscript hpc/preflight_cdsdatagrab.R
+git -C "$REPO_DIR" rev-parse HEAD
+cat "$CDS_DATAGRAB_R_LIB/.cds-datagrab-installed-commit"
+```
 
-The raster template is the authoritative output domain. The CDS request area is derived from the union of the template's non-NA geographic footprint and `study_bbox.gpkg`, expanded by a one-degree interpolation margin and aligned outward to the 0.25-degree ERA5 grid. The original GPKG-only area (with a 0.25-degree margin) did not reach the northern template cells, producing the fixed 529-cell gap.
+The source and installed commits must match before production execution.
 
-Standardization performs one `terra::project(..., method = "bilinear")` operation followed by the template mask. Complete cellwise template coverage is mandatory; a second `resample()` or extrapolation cannot recover values absent from the source extent. Existing incomplete daily products are invalid observations and are planned for re-request and quarantined during execution. The request-area definition is included in the deterministic raw filename hash, so changing the area creates a new raw target while preserving the old file.
+## CDS credentials
 
-Download targets in request manifests are filenames only. They resolve to absolute paths under the active profile's `raw/` directory and are downloaded through an atomic `.partial` target. A request is successful only after the resulting file exists, is nonempty, has a supported signature, and— for NetCDF—has readable ERA5 temperature and time metadata. Download failures stop the pipeline at `download`; processing is not attempted. Run manifests are written at initialization and updated through failures. Runtime logs are written below the configured output root, never to a repository-relative `logs/` directory. Spatial diagnostics record MD5 and SHA256 separately.
+An active CDS account and credential are required for execution. Export `ecmwfr_PAT` securely, for example from `~/.Renviron`, and check presence without printing the value:
+
+```bash
+Rscript - <<'RS'
+token <- Sys.getenv("ecmwfr_PAT", unset = "")
+stopifnot(nzchar(token))
+cat("CDS credential is available.\n")
+RS
+```
+
+Never commit, paste, log, or place the credential value in YAML. Planning mode does not contact CDS.
+
+## Plan, execute, validate
+
+For a first LAI production year:
+
+```bash
+export CDS_DATAGRAB_ROOT=/project/disease_ecology/cds-datagrab-lai-low-production-output
+export CONFIG=config/era5_lai_low_production.yml PROFILE=production
+export START_DATE=2022-01-01 END_DATE=2022-12-31
+unset ALLOW_MULTIYEAR
+
+DRY_RUN=true  bash hpc/submit_era5_lai_low.sh   # planning only
+DRY_RUN=false bash hpc/submit_era5_lai_low.sh   # execution
+```
+
+Inspect the run manifest, `planned_dates.csv`, request manifests, raw/daily/weekly inventories, and Slurm logs before proceeding to the next year. A genuine success has Slurm `COMPLETED`, exit code `0:0`, zero daily and weekly failures, final validation `success`, and pipeline status `success`.
+
+The generic dispatcher is convenient for annual work and defaults to planning:
+
+```bash
+bash hpc/submit_product_year.sh --product era5_lai_low --year 2024 --mode plan \
+  --output-root /project/disease_ecology/cds-datagrab-lai-low-production-output
+```
+
+Use `--mode execute` only after inspecting the plan. See [docs/operator_runbook.md](docs/operator_runbook.md) for all products, annual windows, monitoring, and safe reruns.
+
+## Resume and troubleshooting
+
+Valid matching raw files, daily rasters, and weekly rasters are reused. A failed month can be retried without deleting successful months; a rerun requests only missing or invalid inputs. The same output root must be retained across annual chunks so inventory and ISO-week completion can work.
+
+Common causes and remedies:
+
+- CDS HTTP/2 or transport failure: retain successful months and rerun the failed plan; do not delete the root.
+- `.netcdf` versus `.nc`: both are supported case-insensitively; content validation determines the reader.
+- Missing GDAL NetCDF support: expected on some Atlas nodes; use the ncdf4 preflight/backend.
+- Missing packages: restore the external library and preserve the home library in `R_LIBS_USER`.
+- Commit mismatch: rerun `hpc/install_cdsdatagrab_atlas.sh`.
+- Smoke logs for production: set `PROFILE=production`; wrappers reject profile/config conflicts.
+- Multi-year guard: submit one calendar year or explicitly review `ALLOW_MULTIYEAR=true`.
+- Incomplete boundary week or unavailable future dates: expected; do not fabricate or submit out-of-window dates.
+- Output-root safety error: use an external, variable-specific root, never the repository checkout.
+
+See [docs/output_schema.md](docs/output_schema.md), [docs/operator_runbook.md](docs/operator_runbook.md), and [docs/production_validation_summary.md](docs/production_validation_summary.md).

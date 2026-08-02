@@ -37,12 +37,13 @@ read_pipeline_config <- function(path) {
   r <- normalizePath(root, winslash = "/", mustWork = FALSE)
   identical(tolower(p), tolower(r)) || startsWith(tolower(p), paste0(tolower(r), "/"))
 }
-.reject_root <- function(root, project_root) {
+.reject_root <- function(root, project_root, explicit = TRUE) {
   if (!nzchar(root) || root %in% c("/", "\\")) stop("Output root is invalid", call. = FALSE)
   home <- normalizePath(path.expand("~"), winslash = "/", mustWork = FALSE)
   old <- "/project/disease_ecology/NWScrewworm"
   if (identical(tolower(root), tolower(home))) stop("User home directory cannot be the output root", call. = FALSE)
   if (identical(tolower(root), tolower(normalizePath(project_root, winslash = "/", mustWork = TRUE)))) stop("Repository root cannot be the output root", call. = FALSE)
+  if (isTRUE(explicit) && .descendant(root, project_root)) stop("CDS_DATAGRAB_ROOT must be outside the repository checkout", call. = FALSE)
   if (grepl("NWScrewworm", root, ignore.case=TRUE) || identical(tolower(root), tolower(old)) || startsWith(tolower(root), paste0(tolower(old), "/"))) stop("The old NWScrewworm data root is not permitted", call. = FALSE)
 }
 
@@ -55,8 +56,10 @@ resolve_storage_paths <- function(config, project_root, output_root = NULL, crea
   if (nzchar(obsolete)) warning("CDS_DATAGRAB_DATA_ROOT is obsolete and is ignored.\nSet CDS_DATAGRAB_ROOT instead.", call. = FALSE)
   configured <- config$paths$root %||% ""
   env_root <- Sys.getenv("CDS_DATAGRAB_ROOT", "")
+  explicit_root <- (!is.null(output_root) && nzchar(output_root)) || nzchar(env_root) || nzchar(configured)
   chosen <- if (!is.null(output_root) && nzchar(output_root)) output_root else if (nzchar(env_root)) env_root else if (nzchar(configured)) configured else file.path("runtime", "cds-datagrab")
-  root <- .normal_path(chosen, project_root); .reject_root(root, project_root)
+  root <- .normal_path(chosen, project_root); .reject_root(root, project_root, explicit_root)
+  if (isTRUE(explicit_root) && file.exists(file.path(root, ".cds-datagrab-root"))) { marker <- tryCatch(jsonlite::read_json(file.path(root, ".cds-datagrab-root"), simplifyVector=TRUE), error=function(e)NULL); marker_dataset <- if (!is.null(marker)) as.character(marker$dataset_id %||% "") else ""; if (nzchar(marker_dataset) && !identical(marker_dataset, dataset)) stop("CDS_DATAGRAB_ROOT already belongs to variable '", marker_dataset, "'; use a variable-specific output root", call.=FALSE) }
   dataset_root <- file.path(root, "data", profile, dataset)
   run_root <- file.path(root, "runs", profile, dataset)
   p <- list(root = root, profile = profile, dataset_id = dataset, dataset_root = dataset_root,
@@ -71,7 +74,7 @@ resolve_storage_paths <- function(config, project_root, output_root = NULL, crea
   all_paths <- unname(unlist(p[path_names], use.names = FALSE)); if (any(!vapply(all_paths, .descendant, logical(1), root = root))) stop("Resolved path escaped output root", call. = FALSE)
   if (create) {
     fs::dir_create(root, recurse = TRUE)
-    if (file.exists(p$root_marker)) { marker <- tryCatch(jsonlite::read_json(p$root_marker, simplifyVector=TRUE), error=function(e)NULL); if (is.null(marker) || !identical(marker$application, "cds-datagrab")) stop("Existing storage root marker is not owned by cds-datagrab", call.=FALSE) } else jsonlite::write_json(list(application = "cds-datagrab", schema_version = 1L, created_utc = format(Sys.time(), tz = "UTC"), created_by = Sys.info()[["user"]]), p$root_marker, auto_unbox = TRUE, pretty = TRUE)
+    if (file.exists(p$root_marker)) { marker <- tryCatch(jsonlite::read_json(p$root_marker, simplifyVector=TRUE), error=function(e)NULL); if (is.null(marker) || !identical(marker$application, "cds-datagrab")) stop("Existing storage root marker is not owned by cds-datagrab", call.=FALSE); marker_dataset <- as.character(marker$dataset_id %||% ""); if (nzchar(marker_dataset) && !identical(marker_dataset, dataset)) stop("CDS_DATAGRAB_ROOT already belongs to variable '", marker_dataset, "'; use a variable-specific output root", call.=FALSE) } else jsonlite::write_json(list(application = "cds-datagrab", schema_version = 2L, dataset_id = dataset, created_utc = format(Sys.time(), tz = "UTC"), created_by = Sys.info()[["user"]]), p$root_marker, auto_unbox = TRUE, pretty = TRUE)
     fs::dir_create(unname(unlist(p[c("raw_dir", "raw_quarantine_dir", "quarantine_dir", "extracted_dir", "daily_dir", "weekly_dir", "temp_dir", "cache_dir", "runs_root", "pipeline_log_dir", "slurm_log_dir")], use.names=FALSE)), recurse = TRUE)
   }
   p
@@ -103,6 +106,37 @@ validate_pipeline_config <- function(config) {
   if (config$cds$variable != spec$cds_variable || config$cds$daily_statistic != spec$daily_statistic) stop("Configuration does not match variable specification")
   if (!is.null(config$spatial$expected_crs) && requireNamespace("terra", quietly = TRUE)) { validate_template_crs(terra::rast(config$spatial$template_path), config$spatial$expected_crs, config$spatial$geometry_tolerance %||% 0.001); validate_template_geometry(terra::rast(config$spatial$template_path), list(rows=config$spatial$expected_dimensions$rows, columns=config$spatial$expected_dimensions$columns, layers=config$spatial$expected_dimensions$layers, resolution=config$spatial$expected_resolution, extent=config$spatial$expected_extent), config$spatial$geometry_tolerance %||% 0.001) }
   config
+}
+
+resolve_pipeline_date_window <- function(config, start_date=NULL, end_date=NULL, dry_run=FALSE) {
+  temporal <- config$temporal
+  configured_start <- as.Date(temporal$configured_start_date %||% temporal$initial_start_date)
+  configured_end <- as.Date(temporal$configured_end_date %||% temporal$future_end_date %||% temporal$observed_end)
+  observed_end <- if (identical(temporal$observed_end, "auto")) Sys.Date() - as.integer(temporal$source_lag_days %||% 0L) else as.Date(temporal$observed_end)
+  requested_start <- as.Date(start_date %||% configured_start)
+  requested_end <- as.Date(end_date %||% configured_end)
+  if (anyNA(c(configured_start, configured_end, observed_end, requested_start, requested_end))) stop("Invalid production date window", call.=FALSE)
+  if (requested_start > requested_end) stop("Effective date window start must not be after end", call.=FALSE)
+  if (requested_start < configured_start || requested_end > configured_end) stop("Date override must remain within configured production window ", format(configured_start), " through ", format(configured_end), call.=FALSE)
+  if (!isTRUE(dry_run) && identical(unname(as.character(config$project$profile)), "production") && requested_start <= observed_end) effective_end <- min(requested_end, observed_end) else effective_end <- requested_end
+  effective_start <- requested_start
+  future_start <- if (requested_end > observed_end) max(requested_start, observed_end + 1L) else as.Date(NA)
+  list(configured_start=configured_start, configured_end=configured_end, requested_start=requested_start, requested_end=requested_end, effective_start=effective_start, effective_end=effective_end, observed_start=configured_start, observed_end=observed_end, future_start=future_start, future_end=if (requested_end > observed_end) requested_end else as.Date(NA), date_override_source=if (!is.null(start_date) || !is.null(end_date)) "explicit_override" else "configured")
+}
+
+validate_plan <- function(plan, requests, window, config, spatial_diagnostics=NULL) {
+  dates <- sort(unique(as.Date(plan$date)))
+  expected <- if (length(requests)) safe_date_sequence(window$effective_start, window$effective_end) else dates
+  if (length(dates) != length(plan$date) || anyDuplicated(dates)) stop("Plan validation failed: planned dates are not unique", call.=FALSE)
+  if (length(dates) && (!all(dates >= window$effective_start) || !all(dates <= window$effective_end))) stop("Plan validation failed: planned dates are outside the requested window", call.=FALSE)
+  if (!identical(as.character(dates), as.character(expected))) stop("Plan validation failed: planned dates do not cover the effective window", call.=FALSE)
+  targets <- if (length(requests)) vapply(requests, function(x) as.character(x$target), character(1)) else character()
+  hashes <- if (length(requests)) vapply(requests, function(x) as.character(x$request_hash), character(1)) else character()
+  if (anyDuplicated(targets) || anyDuplicated(hashes)) stop("Plan validation failed: request targets and hashes must be unique", call.=FALSE)
+  covered <- if (length(requests)) sort(unique(as.Date(unlist(lapply(requests, function(x) x$raw_request_dates))))) else as.Date(character())
+  if (!identical(as.character(covered), as.character(expected))) stop("Plan validation failed: request rows do not cover all planned dates", call.=FALSE)
+  if (length(requests)) for (request in requests) if (length(unique(format(as.Date(request$raw_request_dates), "%Y-%m"))) != 1L) stop("Plan validation failed: request row crosses a month", call.=FALSE)
+  list(status="success", planned_dates=length(dates), request_rows=length(requests), uncovered_dates=length(setdiff(expected, covered)), duplicate_dates=length(plan$date)-length(dates), duplicate_request_targets=sum(duplicated(targets)), duplicate_request_hashes=sum(duplicated(hashes)), template_sha256=spatial_diagnostics$template_file_sha256 %||% NA_character_)
 }
 
 ensure_pipeline_directories <- function(config, output_root = NULL) { validate_pipeline_config(config); resolve_storage_paths(config, config$project_root %||% resolve_project_root(), output_root, create = TRUE) }
