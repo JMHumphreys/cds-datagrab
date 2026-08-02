@@ -43,7 +43,7 @@ temporal:
   observed_end: auto
   source_lag_days: 7
   overlap_days: 14
-  future_end_date: '2027-12-31'
+  future_end_date: '2026-12-31'
 cds:
   dataset_short_name: derived-era5-single-levels-daily-statistics
   product_type: reanalysis

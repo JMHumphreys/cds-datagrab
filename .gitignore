@@ -35,3 +35,10 @@ secrets.yaml
 
 # local data
 /local
+.Rcheck/
+*.Rcheck/
+*.tar.gz
+.r_lib/
+*.tif
+*.tif.aux.xml
+*.Rout

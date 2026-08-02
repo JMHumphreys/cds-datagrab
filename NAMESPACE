@@ -34,4 +34,6 @@ export(detect_download_format, inspect_netcdf_ncdf4, select_era5_temperature_var
  selected_dates_for_raw, validate_date_source_map, normalize_path_key)
 importFrom(utils, unzip)
 importFrom(stats, median)
+importFrom(stats, runif)
+importFrom(stats, weighted.mean)
 importFrom(utils, tail)

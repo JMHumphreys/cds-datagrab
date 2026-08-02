@@ -118,7 +118,7 @@ resolve_pipeline_date_window <- function(config, start_date=NULL, end_date=NULL,
   if (anyNA(c(configured_start, configured_end, observed_end, requested_start, requested_end))) stop("Invalid production date window", call.=FALSE)
   if (requested_start > requested_end) stop("Effective date window start must not be after end", call.=FALSE)
   if (requested_start < configured_start || requested_end > configured_end) stop("Date override must remain within configured production window ", format(configured_start), " through ", format(configured_end), call.=FALSE)
-  if (!isTRUE(dry_run) && identical(as.character(config$project$profile), "production") && requested_start <= observed_end) effective_end <- min(requested_end, observed_end) else effective_end <- requested_end
+  if (!isTRUE(dry_run) && identical(unname(as.character(config$project$profile)), "production") && requested_start <= observed_end) effective_end <- min(requested_end, observed_end) else effective_end <- requested_end
   effective_start <- requested_start
   future_start <- if (requested_end > observed_end) max(requested_start, observed_end + 1L) else as.Date(NA)
   list(configured_start=configured_start, configured_end=configured_end, requested_start=requested_start, requested_end=requested_end, effective_start=effective_start, effective_end=effective_end, observed_start=configured_start, observed_end=observed_end, future_start=future_start, future_end=if (requested_end > observed_end) requested_end else as.Date(NA), date_override_source=if (!is.null(start_date) || !is.null(end_date)) "explicit_override" else "configured")

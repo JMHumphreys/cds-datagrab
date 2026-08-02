@@ -7,9 +7,9 @@
 #SBATCH --time=12:00:00
 #SBATCH --mem=32G
 set -euo pipefail
-module purge
-module load r/4.5 udunits gdal proj geos
 REPO_DIR="${REPO_DIR:-${SLURM_SUBMIT_DIR}}"
+source "$REPO_DIR/hpc/lib/cds_datagrab_env.sh"
+cds_datagrab_load_atlas_modules
 CONFIG="${CONFIG:-config/era5_mintemp.yml}"
 MODE="${MODE:-plan}"
 DRY_RUN="${DRY_RUN:-true}"

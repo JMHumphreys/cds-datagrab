@@ -1,0 +1,36 @@
+\name{cdsdatagrab-internals}
+\alias{cdsdatagrab-internals}
+\alias{aggregate_daily_values}
+\alias{aggregate_weekly_values}
+\alias{align_extent_to_source_grid}
+\alias{build_cds_api_payload}
+\alias{build_request_dates}
+\alias{build_variable_requests}
+\alias{cds_retry_delay}
+\alias{convert_source_units}
+\alias{daily_output_filename}
+\alias{get_variable_spec}
+\alias{is_transient_cds_error}
+\alias{normalize_manifest_dates}
+\alias{normalize_output_values}
+\alias{normalize_source_units}
+\alias{normalize_path_key}
+\alias{process_downloaded_variable}
+\alias{read_daily_netcdf}
+\alias{request_adapter_for_spec}
+\alias{request_api_fields}
+\alias{request_entry_for_raw}
+\alias{resolve_netcdf_variable}
+\alias{run_environmental_pipeline}
+\alias{selected_dates_for_raw}
+\alias{validate_cds_api_payload}
+\alias{validate_date_source_map}
+\alias{validate_source_values}
+\alias{validate_variable_values}
+\alias{variable_spec_hash}
+\alias{weekly_input_fingerprint}
+\alias{weekly_output_filename}
+\alias{with_cds_retry}
+\title{Internal pipeline helpers}
+\description{Internal helpers used by the cdsdatagrab environmental-data workflow.}
+\keyword{internal}
