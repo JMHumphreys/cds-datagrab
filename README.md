@@ -29,6 +29,23 @@ All products share one root and are separated below `data/<profile>/`. Current p
 
 ERA5 direct NetCDF is read with `ncdf4`; AgERA5 ZIP members are safely extracted and read with the same backend when Atlas GDAL cannot open NetCDF. See [the output reference](docs/output_schema.md) for field-level provenance.
 
+### ERA5-Land daily-mean family
+
+These eight additive products share one monthly `derived-era5-land-daily-statistics` NetCDF request (`daily_mean`, `utc-06:00`, `1_hourly`) and fan out into separate product directories. They do not replace the existing ERA5 minimum-temperature, soil-moisture, or low-LAI products.
+
+| Product | Source variable | Units | Daily meaning | Weekly rule |
+|---|---|---|---|---|
+| `era5land_tmean` | `2m_temperature` | K → °C | UTC−6 arithmetic daily mean | mean of 7 daily means |
+| `era5land_soiltemp_l1_mean` | `soil_temperature_level_1` | K → °C | UTC−6 arithmetic daily mean; 0–7 cm | mean |
+| `era5land_soiltemp_l2_mean` | `soil_temperature_level_2` | K → °C | UTC−6 arithmetic daily mean; 7–28 cm | mean |
+| `era5land_soilwater_l1_mean` | `volumetric_soil_water_layer_1` | m³ m⁻³ | UTC−6 arithmetic daily mean; 0–7 cm | mean |
+| `era5land_soilwater_l2_mean` | `volumetric_soil_water_layer_2` | m³ m⁻³ | UTC−6 arithmetic daily mean; 7–28 cm | mean |
+| `era5land_surface_pressure_mean` | `surface_pressure` | Pa → kPa | UTC−6 arithmetic daily mean | mean |
+| `era5land_lai_high_mean` | `leaf_area_index_high_vegetation` | m² m⁻² | UTC−6 daily label | mean |
+| `era5land_lai_low_mean` | `leaf_area_index_low_vegetation` | m² m⁻² | UTC−6 daily label | mean |
+
+High- and low-vegetation LAI are monthly-climatology products: they represent monthly variability but not interannual variability. Consecutive daily layers may therefore be identical and are not interpreted as independently observed daily vegetation dynamics.
+
 ## Production period and annual execution
 
 The canonical configured range is **2022-01-01 through 2026-12-31**. Production execution is one calendar year at a time using the same product-specific output root. The configured horizon is not the same as the effective observed-data endpoint: unavailable future dates are recorded as future/unavailable and are not submitted to CDS.

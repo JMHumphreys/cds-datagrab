@@ -18,3 +18,5 @@ All products use `spatial_domain/study_area_raster.tif` and the template checksu
 ```
 
 The validated LAI/RH code line includes ncdf4 NetCDF4/HDF5 reading, `.nc`/`.netcdf` discovery, RH ZIP extraction, decoded source dates, active raw refresh, daily/weekly reuse, and dry-run annual planning. Exact Atlas job IDs, daily counts, weekly counts, and validation commits are intentionally not repeated here unless recoverable from retained manifests or supplied operator records.
+
+ERA5-Land daily-mean products are implemented as an additive, pre-smoke-test family. They use one shared monthly eight-variable request and product-specific daily/weekly fan-out. The LAI high/low outputs carry the monthly-climatology/no-interannual-variability caveat; this family has not been run against Atlas during implementation.

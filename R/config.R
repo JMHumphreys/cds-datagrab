@@ -105,6 +105,20 @@ resolve_config_paths <- function(config, project_root, output_root = NULL, creat
   config
 }
 
+resolve_source_storage_paths <- function(config, project_root, output_root = NULL, create = FALSE) {
+  profile <- as.character(config$project$profile %||% "")
+  family <- as.character(config$project$source_family_id %||% config$source_family_id %||% "")
+  if (!profile %in% c("production", "smoke")) stop("project.profile must be smoke or production", call.=FALSE)
+  if (!nzchar(family) || grepl("[/\\\\]", family) || grepl("\\.\\.", family)) stop("source_family_id is invalid", call.=FALSE)
+  root_info <- resolve_output_root(profile, project_root, output_root); root <- root_info$value; .reject_root(root, project_root, !identical(root_info$source, "portable_default"))
+  source_root <- file.path(root, "data", profile, "_sources", family)
+  p <- list(root=root, root_source=root_info$source, profile=profile, source_family_id=family, source_root=source_root, dataset_root=source_root, runs_root=file.path(root,"runs",profile,"_sources",family), pipeline_log_dir=file.path(root,"logs","pipeline",profile,"_sources",family), slurm_log_dir=file.path(root,"logs","slurm",profile),
+    raw_dir=file.path(source_root,"raw"), raw_quarantine_dir=file.path(source_root,"quarantine","raw"), extracted_dir=file.path(source_root,"extracted"), cache_dir=file.path(source_root,"cache"), root_marker=file.path(root,".cds-datagrab-root"))
+  if (any(!vapply(p[c("source_root","raw_dir","extracted_dir","cache_dir")], .descendant, logical(1), root=root))) stop("Resolved source path escaped output root", call.=FALSE)
+  if (create) { fs::dir_create(root, recurse=TRUE); if (!file.exists(p$root_marker)) jsonlite::write_json(list(application="cds-datagrab",schema_version=3L,profiles=c("production","smoke"),created_utc=format(Sys.time(),tz="UTC")),p$root_marker,auto_unbox=TRUE,pretty=TRUE); fs::dir_create(unname(unlist(p[c("raw_dir","raw_quarantine_dir","extracted_dir","cache_dir","runs_root","pipeline_log_dir","slurm_log_dir")],use.names=FALSE)),recurse=TRUE) }
+  p
+}
+
 validate_pipeline_config <- function(config) {
   req <- c("project", "spatial", "paths", "temporal", "cds", "processing", "weekly", "future", "validation")
   miss <- req[!vapply(req, function(x) !is.null(config[[x]]), logical(1))]

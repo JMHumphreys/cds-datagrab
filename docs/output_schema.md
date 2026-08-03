@@ -17,6 +17,30 @@ The storage implementation creates this schema below the shared production or sm
 └── logs/<pipeline|slurm>/<profile>/<product>/
 ```
 
+ERA5-Land uses a shared source-family layer so the eight-variable NetCDF bundle is stored once:
+
+```text
+data/<profile>/_sources/era5land_daily_mean_utc06/
+├── raw/
+├── extracted/
+└── cache/
+```
+
+Product daily and weekly outputs remain under `data/<profile>/<product_id>/`. Source and product run manifests record `source_family_id`, `request_hash`, `shared_raw_path`, requested variables, returned daily time zone, frequency, and source-to-product date mappings. Shared raw files must not be removed while any product lineage references their request hash.
+
+The conceptual CDS request for each calendar month is one multi-variable request (the area is always derived from the protected template and configured buffer):
+
+```text
+dataset = derived-era5-land-daily-statistics
+variable = [2m_temperature, soil_temperature_level_1, soil_temperature_level_2,
+            volumetric_soil_water_layer_1, volumetric_soil_water_layer_2,
+            surface_pressure, leaf_area_index_high_vegetation,
+            leaf_area_index_low_vegetation]
+daily_statistic = daily_mean; time_zone = utc-06:00; frequency = 1_hourly
+data_format = netcdf; download_format = unarchived; request_chunk = month
+area = <template-derived buffered and source-grid-aligned extent>
+```
+
 Daily filenames are `<prefix>_YYYY-MM-DD.tif`; weekly filenames are `<prefix>_YYYY-Www.tif`. LAI uses `lai_low_`; RH uses `relhum_min_`.
 
 Run directories contain `run_manifest.json`, planned dates, request/download manifests, daily and weekly inventories, date-source maps, stage logs, and diagnostics. Provenance includes source and installed Git commits, installed package path, R library paths, variable-spec hash, request hashes, raw checksums, decoded source dates, output units, template checksum, and validation flags. New manifests also record `resolved_output_root`, `output_root_source`, `profile`, `product_id`, `data_directory`, `run_directory`, and `slurm_log_directory`.

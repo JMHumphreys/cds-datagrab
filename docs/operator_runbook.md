@@ -70,3 +70,27 @@ Rscript scripts/audit_output_layout.R --output-root /project/disease_ecology/cds
 ```
 
 Smoke outputs are disposable only after validation records are preserved. The initializer is dry-run by default: `bash hpc/init_output_root.sh --root /absolute/path --profile smoke`, adding `--execute` only after reviewing the printed paths. Never delete configuration, fixtures, source, or the spatial template. A new product must follow [adding_products.md](adding_products.md), including registry, reader/decoder, filename, inventory, smoke, production, dispatcher, and reuse tests.
+
+## ERA5-Land daily-mean smoke acceptance
+
+The family request is one monthly unarchived NetCDF containing eight variables. The first Atlas smoke is a three-day dry plan/execute sequence:
+
+```bash
+export REPO_DIR=/project/disease_ecology/cds-datagrab
+export CDS_DATAGRAB_ROOT=/project/disease_ecology/cds-datagrab-smoke-output
+export PROFILE=smoke CONFIG=config/era5land_daily_mean_utc06_smoke.yml
+export START_DATE=2026-02-01 END_DATE=2026-02-03
+DRY_RUN=true  bash hpc/submit_era5land_daily_mean.sh
+DRY_RUN=false MODE=full bash hpc/submit_era5land_daily_mean.sh
+```
+
+Expected validation is one raw February bundle, eight variables, three daily rasters per product (24 total), zero daily failures, and no required complete weekly output. Extend the same root and February bundle through the complete week:
+
+```bash
+export CONFIG=config/era5land_daily_mean_utc06_weekly_smoke.yml
+export START_DATE=2026-02-02 END_DATE=2026-02-08
+DRY_RUN=true  bash hpc/submit_era5land_daily_mean.sh
+DRY_RUN=false MODE=full bash hpc/submit_era5land_daily_mean.sh
+```
+
+This should reuse or safely extend the raw bundle, produce seven valid daily rasters and one weekly mean per product, and make an identical rerun perform zero CDS requests. The production dispatcher is additive: `bash hpc/submit_product_year.sh --product era5land_daily_mean_utc06 --year 2025 --mode plan` plans 12 shared monthly requests; individual ERA5-Land product identifiers reuse the same source family.
