@@ -1,6 +1,6 @@
 # Operator runbook
 
-Run one product and one calendar year at a time. Keep the same external product-specific root for all years. Plan first, inspect the manifest, then execute.
+Run one product and one calendar year at a time. Keep the shared production root for all products and years. Plan first, inspect the manifest, then execute.
 
 ## Common setup
 
@@ -19,10 +19,10 @@ REPO_DIR="$REPO_DIR" Rscript hpc/preflight_cdsdatagrab.R
 
 | Product | Root | Config | Wrapper | Annual expected dates / requests |
 |---|---|---|---|---|
-| `era5_mintemp` | `/project/disease_ecology/cds-datagrab-mintemp-production-output` | `config/era5_mintemp_production.yml` | `hpc/submit_era5_mintemp.sh` | 365/366, 12 |
-| `era5_soilmoist` | `/project/disease_ecology/cds-datagrab-soilmoist-production-output` | `config/era5_soilmoist_production.yml` | `hpc/submit_era5_soilmoist.sh` | 365/366, 12 |
-| `era5_lai_low` | `/project/disease_ecology/cds-datagrab-lai-low-production-output` | `config/era5_lai_low_production.yml` | `hpc/submit_era5_lai_low.sh` | 365/366, 12 |
-| `agera5_relhum_min` | `/project/disease_ecology/cds-datagrab-relhum-min-production-output` | `config/agera5_relhum_min_production.yml` | `hpc/submit_agera5_relhum_min.sh` | 365/366, 12 |
+| `era5_mintemp` | `/project/disease_ecology/cds-datagrab-output` | `config/era5_mintemp_production.yml` | `hpc/submit_era5_mintemp.sh` | 365/366, 12 |
+| `era5_soilmoist` | `/project/disease_ecology/cds-datagrab-output` | `config/era5_soilmoist_production.yml` | `hpc/submit_era5_soilmoist.sh` | 365/366, 12 |
+| `era5_lai_low` | `/project/disease_ecology/cds-datagrab-output` | `config/era5_lai_low_production.yml` | `hpc/submit_era5_lai_low.sh` | 365/366, 12 |
+| `agera5_relhum_min` | `/project/disease_ecology/cds-datagrab-output` | `config/agera5_relhum_min_production.yml` | `hpc/submit_agera5_relhum_min.sh` | 365/366, 12 |
 
 The 2024 annual window has 366 days; 2022, 2023, 2025, and 2026 have 365 configured days. The effective observed 2026 endpoint is determined by the configured product availability and is recorded in the manifest.
 
@@ -58,3 +58,15 @@ Inspect the latest `run_manifest.json` and require `pipeline_status: success`, f
 5. Execute only after confirming missing/invalid inputs.
 
 Do not delete the production root to recover from a partial failure.
+
+## Operational checklist
+
+Load the Atlas modules and libraries shown in `README.md`, run the credential-presence check without printing `ecmwfr_PAT`, and run `hpc/preflight_cdsdatagrab.R` before submission. The preflight compares the source checkout commit with `.cds-datagrab-installed-commit`. Select `/project/disease_ecology/cds-datagrab-output` for production and `/project/disease_ecology/cds-datagrab-smoke-output` for smoke; use `hpc/submit_product_year.sh --mode plan` before the explicit `--mode execute`.
+
+Monitor with `squeue`, inspect `runs/production/<product>/<run_id>/run_manifest.json`, and rerun only missing or invalid work. Transient CDS failures should be retried from a new plan; valid raw, daily, and weekly products are reusable. Audit the shared root read-only with:
+
+```bash
+Rscript scripts/audit_output_layout.R --output-root /project/disease_ecology/cds-datagrab-output --profile production
+```
+
+Smoke outputs are disposable only after validation records are preserved. The initializer is dry-run by default: `bash hpc/init_output_root.sh --root /absolute/path --profile smoke`, adding `--execute` only after reviewing the printed paths. Never delete configuration, fixtures, source, or the spatial template. A new product must follow [adding_products.md](adding_products.md), including registry, reader/decoder, filename, inventory, smoke, production, dispatcher, and reuse tests.

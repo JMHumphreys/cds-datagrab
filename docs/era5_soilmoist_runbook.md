@@ -20,20 +20,20 @@ Prepare but do not execute these Atlas commands:
 
 ```bash
 cd /project/disease_ecology/cds-datagrab
-CDS_DATAGRAB_ROOT=/project/disease_ecology/cds-datagrab-soilmoist-smoke-output PROFILE=smoke CONFIG=config/era5_soilmoist_smoke.yml MODE=plan DRY_RUN=true OBSERVED_END=2026-07-03 bash hpc/submit_era5_soilmoist.sh
-CDS_DATAGRAB_ROOT=/project/disease_ecology/cds-datagrab-soilmoist-smoke-output PROFILE=smoke CONFIG=config/era5_soilmoist_smoke.yml MODE=full DRY_RUN=false OBSERVED_END=2026-07-03 bash hpc/submit_era5_soilmoist.sh
-CDS_DATAGRAB_ROOT=/project/disease_ecology/cds-datagrab-soilmoist-weekly-smoke-output PROFILE=smoke CONFIG=config/era5_soilmoist_weekly_smoke.yml MODE=plan DRY_RUN=true OBSERVED_END=2026-07-12 bash hpc/submit_era5_soilmoist.sh
-CDS_DATAGRAB_ROOT=/project/disease_ecology/cds-datagrab-soilmoist-weekly-smoke-output PROFILE=smoke CONFIG=config/era5_soilmoist_weekly_smoke.yml MODE=full DRY_RUN=false OBSERVED_END=2026-07-12 bash hpc/submit_era5_soilmoist.sh
+CDS_DATAGRAB_ROOT=/project/disease_ecology/cds-datagrab-smoke-output PROFILE=smoke CONFIG=config/era5_soilmoist_smoke.yml MODE=plan DRY_RUN=true OBSERVED_END=2026-07-03 bash hpc/submit_era5_soilmoist.sh
+CDS_DATAGRAB_ROOT=/project/disease_ecology/cds-datagrab-smoke-output PROFILE=smoke CONFIG=config/era5_soilmoist_smoke.yml MODE=full DRY_RUN=false OBSERVED_END=2026-07-03 bash hpc/submit_era5_soilmoist.sh
+CDS_DATAGRAB_ROOT=/project/disease_ecology/cds-datagrab-smoke-output PROFILE=smoke CONFIG=config/era5_soilmoist_weekly_smoke.yml MODE=plan DRY_RUN=true bash hpc/submit_era5_soilmoist.sh
+CDS_DATAGRAB_ROOT=/project/disease_ecology/cds-datagrab-smoke-output PROFILE=smoke CONFIG=config/era5_soilmoist_weekly_smoke.yml MODE=full DRY_RUN=false OBSERVED_END=2026-07-12 bash hpc/submit_era5_soilmoist.sh
 ```
 
 The three-day acceptance is 3 valid daily, 0 invalid, 0 weekly written, 1 incomplete week, pipeline success. The seven-day acceptance is 7 valid daily, 0 invalid, 1 complete week, 1 weekly written, and `soilmoist_2026-W28.tif`.
 
 ## One-year staging and idempotence
 
-Use the isolated root `/project/disease_ecology/cds-datagrab-soilmoist-production-output` and run through `2022-12-31` only after the dry plan is reviewed:
+Use the shared root `/project/disease_ecology/cds-datagrab-output` and run through `2022-12-31` only after the dry plan is reviewed:
 
 ```bash
-CDS_DATAGRAB_ROOT=/project/disease_ecology/cds-datagrab-soilmoist-production-output PROFILE=production CONFIG=config/era5_soilmoist_production.yml MODE=full DRY_RUN=false OBSERVED_END=2022-12-31 bash hpc/submit_era5_soilmoist.sh
+CDS_DATAGRAB_ROOT=/project/disease_ecology/cds-datagrab-output PROFILE=production CONFIG=config/era5_soilmoist_production.yml MODE=full DRY_RUN=false OBSERVED_END=2022-12-31 bash hpc/submit_era5_soilmoist.sh
 ```
 
 Expected inventory is 365 valid daily rasters, 51 complete weekly rasters, and two incomplete boundary weeks. Review winter, spring, summer, and autumn rasters and independently calculate sample weekly means. Rerunning the same command should plan no dates, make no CDS requests, write no daily or weekly outputs, reuse 365 daily products and 51 weekly products, and finish successfully.

@@ -2,6 +2,8 @@
 
 This summary records validated behavior without inventing unavailable live-run counts.
 
+The consolidated-root migration was verified by matching file counts, matching byte totals, checksum-mode `rsync` comparisons, successful planning tests for all four products, and zero newly planned dates after switching to the consolidated root. No live counts are invented here. The template SHA256 remains `4BE01F0ECAFF35216A72EB8F27E791311AF90D35B5A4FFF1E46A74EDB6DC633B`.
+
 | Product | Smoke / complete-week | Production period | Units | Weekly statistic | Reuse demonstrated |
 |---|---|---|---|---|---|
 | ERA5 minimum temperature | validated in repository tests and established workflow | 2022-01-01 through 2026-12-31 configured | K → °C | minimum | yes |

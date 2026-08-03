@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPO_DIR="${REPO_DIR:-${SLURM_SUBMIT_DIR:-$(pwd)}}"
-CDS_DATAGRAB_ROOT="${CDS_DATAGRAB_ROOT:-/project/disease_ecology/cds-datagrab-production-output}"
+CDS_DATAGRAB_ROOT="${CDS_DATAGRAB_ROOT:-/project/disease_ecology/cds-datagrab-output}"
 PROFILE="${PROFILE:-production}"
 CONFIG="${CONFIG:-config/era5_mintemp_production.yml}"
 MODE="${MODE:-full}"

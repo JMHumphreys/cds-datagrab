@@ -4,6 +4,20 @@
 
 The workflow keeps raw CDS responses, extracted source files, template-aligned daily rasters, weekly rasters, inventories, run manifests, and Slurm logs separate. Raw and derived products are resumable and are never written into the Git checkout.
 
+## Storage layout
+
+Production root: `/project/disease_ecology/cds-datagrab-output`
+Smoke root: `/project/disease_ecology/cds-datagrab-smoke-output`
+
+```text
+<root>/
+├── data/<profile>/<product_id>/
+├── runs/<profile>/<product_id>/<run_id>/
+└── logs/slurm/<profile>/
+```
+
+All products share one root and are separated below `data/<profile>/`. Current product identifiers are `era5_mintemp`, `era5_soilmoist`, `era5_lai_low`, and `agera5_relhum_min`. New variables receive new product directories, not new top-level roots. Production and smoke data are separated by root and profile; annual reruns reuse valid raw, daily, and weekly products. Historical manifests may contain former absolute paths, but old product-specific roots are retired and must not be used in new commands.
+
 ## Supported products
 
 | Product | CDS dataset / variable | Source → output units | Daily meaning | Weekly rule | Production configuration / wrapper |
@@ -65,7 +79,7 @@ Never commit, paste, log, or place the credential value in YAML. Planning mode d
 For a first LAI production year:
 
 ```bash
-export CDS_DATAGRAB_ROOT=/project/disease_ecology/cds-datagrab-lai-low-production-output
+export CDS_DATAGRAB_ROOT=/project/disease_ecology/cds-datagrab-output
 export CONFIG=config/era5_lai_low_production.yml PROFILE=production
 export START_DATE=2022-01-01 END_DATE=2022-12-31
 unset ALLOW_MULTIYEAR
@@ -80,7 +94,7 @@ The generic dispatcher is convenient for annual work and defaults to planning:
 
 ```bash
 bash hpc/submit_product_year.sh --product era5_lai_low --year 2024 --mode plan \
-  --output-root /project/disease_ecology/cds-datagrab-lai-low-production-output
+  --output-root /project/disease_ecology/cds-datagrab-output
 ```
 
 Use `--mode execute` only after inspecting the plan. See [docs/operator_runbook.md](docs/operator_runbook.md) for all products, annual windows, monitoring, and safe reruns.
@@ -99,6 +113,6 @@ Common causes and remedies:
 - Smoke logs for production: set `PROFILE=production`; wrappers reject profile/config conflicts.
 - Multi-year guard: submit one calendar year or explicitly review `ALLOW_MULTIYEAR=true`.
 - Incomplete boundary week or unavailable future dates: expected; do not fabricate or submit out-of-window dates.
-- Output-root safety error: use an external, variable-specific root, never the repository checkout.
+- Output-root safety error: use an external shared root, never the repository checkout.
 
 See [docs/output_schema.md](docs/output_schema.md), [docs/operator_runbook.md](docs/operator_runbook.md), and [docs/production_validation_summary.md](docs/production_validation_summary.md).

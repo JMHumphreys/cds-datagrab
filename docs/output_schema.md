@@ -1,6 +1,6 @@
 # Output and provenance reference
 
-The storage implementation creates this schema below the external root:
+The storage implementation creates this schema below the shared production or smoke root:
 
 ```text
 <root>/
@@ -19,7 +19,7 @@ The storage implementation creates this schema below the external root:
 
 Daily filenames are `<prefix>_YYYY-MM-DD.tif`; weekly filenames are `<prefix>_YYYY-Www.tif`. LAI uses `lai_low_`; RH uses `relhum_min_`.
 
-Run directories contain `run_manifest.json`, planned dates, request/download manifests, daily and weekly inventories, date-source maps, stage logs, and diagnostics. Provenance includes source and installed Git commits, installed package path, R library paths, variable-spec hash, request hashes, raw checksums, decoded source dates, output units, template checksum, and validation flags.
+Run directories contain `run_manifest.json`, planned dates, request/download manifests, daily and weekly inventories, date-source maps, stage logs, and diagnostics. Provenance includes source and installed Git commits, installed package path, R library paths, variable-spec hash, request hashes, raw checksums, decoded source dates, output units, template checksum, and validation flags. New manifests also record `resolved_output_root`, `output_root_source`, `profile`, `product_id`, `data_directory`, `run_directory`, and `slurm_log_directory`.
 
 Raw inventories distinguish active, reused matching, duplicate, superseded, unmatched, invalid, and quarantined files. `.nc` and `.netcdf` are equivalent extensions for discovery; content validation selects ncdf4. AgERA5 `date_source_map.csv` maps each requested date to an extracted member rather than the ZIP container.
 

@@ -41,10 +41,27 @@ read_pipeline_config <- function(path) {
   if (!nzchar(root) || root %in% c("/", "\\")) stop("Output root is invalid", call. = FALSE)
   home <- normalizePath(path.expand("~"), winslash = "/", mustWork = FALSE)
   old <- "/project/disease_ecology/NWScrewworm"
+  legacy <- c(
+    "/project/disease_ecology/cds-datagrab-production-output",
+    "/project/disease_ecology/cds-datagrab-soilmoist-production-output",
+    "/project/disease_ecology/cds-datagrab-lai-low-production-output",
+    "/project/disease_ecology/cds-datagrab-relhum-min-production-output"
+  )
   if (identical(tolower(root), tolower(home))) stop("User home directory cannot be the output root", call. = FALSE)
   if (identical(tolower(root), tolower(normalizePath(project_root, winslash = "/", mustWork = TRUE)))) stop("Repository root cannot be the output root", call. = FALSE)
   if (isTRUE(explicit) && .descendant(root, project_root)) stop("CDS_DATAGRAB_ROOT must be outside the repository checkout", call. = FALSE)
   if (grepl("NWScrewworm", root, ignore.case=TRUE) || identical(tolower(root), tolower(old)) || startsWith(tolower(root), paste0(tolower(old), "/"))) stop("The old NWScrewworm data root is not permitted", call. = FALSE)
+  if (isTRUE(explicit) && (any(tolower(root) == tolower(legacy)) || grepl("cds-datagrab-(production|soilmoist-production|lai-low-production|relhum-min-production)-output", root, ignore.case=TRUE))) warning("CDS_DATAGRAB_ROOT explicitly names a retired product-specific root; use the consolidated root instead.", call.=FALSE)
+}
+
+resolve_output_root <- function(profile, project_root, output_root = NULL) {
+  if (!profile %in% c("production", "smoke")) stop("profile must be production or smoke", call.=FALSE)
+  explicit <- if (!is.null(output_root) && nzchar(output_root)) output_root else Sys.getenv("CDS_DATAGRAB_ROOT", "")
+  if (nzchar(explicit)) return(list(value=.normal_path(explicit, project_root), source=if (!is.null(output_root) && nzchar(output_root)) "argument" else "CDS_DATAGRAB_ROOT"))
+  profile_var <- if (profile == "production") "CDS_DATAGRAB_PRODUCTION_ROOT" else "CDS_DATAGRAB_SMOKE_ROOT"
+  profile_root <- Sys.getenv(profile_var, "")
+  if (nzchar(profile_root)) return(list(value=.normal_path(profile_root, project_root), source=profile_var))
+  list(value=.normal_path(file.path("runtime", "cds-datagrab"), project_root), source="portable_default")
 }
 
 resolve_storage_paths <- function(config, project_root, output_root = NULL, create = FALSE) {
@@ -55,14 +72,12 @@ resolve_storage_paths <- function(config, project_root, output_root = NULL, crea
   obsolete <- Sys.getenv("CDS_DATAGRAB_DATA_ROOT", "")
   if (nzchar(obsolete)) warning("CDS_DATAGRAB_DATA_ROOT is obsolete and is ignored.\nSet CDS_DATAGRAB_ROOT instead.", call. = FALSE)
   configured <- config$paths$root %||% ""
-  env_root <- Sys.getenv("CDS_DATAGRAB_ROOT", "")
-  explicit_root <- (!is.null(output_root) && nzchar(output_root)) || nzchar(env_root) || nzchar(configured)
-  chosen <- if (!is.null(output_root) && nzchar(output_root)) output_root else if (nzchar(env_root)) env_root else if (nzchar(configured)) configured else file.path("runtime", "cds-datagrab")
-  root <- .normal_path(chosen, project_root); .reject_root(root, project_root, explicit_root)
-  if (isTRUE(explicit_root) && file.exists(file.path(root, ".cds-datagrab-root"))) { marker <- tryCatch(jsonlite::read_json(file.path(root, ".cds-datagrab-root"), simplifyVector=TRUE), error=function(e)NULL); marker_dataset <- if (!is.null(marker)) as.character(marker$dataset_id %||% "") else ""; if (nzchar(marker_dataset) && !identical(marker_dataset, dataset)) stop("CDS_DATAGRAB_ROOT already belongs to variable '", marker_dataset, "'; use a variable-specific output root", call.=FALSE) }
+  resolved <- if (nzchar(configured) && is.null(output_root) && !nzchar(Sys.getenv("CDS_DATAGRAB_ROOT", ""))) list(value=.normal_path(configured, project_root), source="configuration") else resolve_output_root(profile, project_root, output_root)
+  root <- resolved$value; .reject_root(root, project_root, !identical(resolved$source, "portable_default"))
+  if (file.exists(file.path(root, ".cds-datagrab-root"))) { marker <- tryCatch(jsonlite::read_json(file.path(root, ".cds-datagrab-root"), simplifyVector=TRUE), error=function(e)NULL); if (!is.null(marker) && !identical(marker$application, "cds-datagrab")) stop("Existing storage root marker is not owned by cds-datagrab", call.=FALSE) }
   dataset_root <- file.path(root, "data", profile, dataset)
   run_root <- file.path(root, "runs", profile, dataset)
-  p <- list(root = root, profile = profile, dataset_id = dataset, dataset_root = dataset_root,
+  p <- list(root = root, root_source = resolved$source, profile = profile, dataset_id = dataset, dataset_root = dataset_root,
             raw_dir = file.path(dataset_root, "raw"), raw_quarantine_dir = file.path(dataset_root, "quarantine", "raw"), quarantine_dir = file.path(dataset_root, "quarantine"), extracted_dir = file.path(dataset_root, "extracted"),
             daily_dir = file.path(dataset_root, "daily"), weekly_dir = file.path(dataset_root, "weekly"),
             temp_dir = file.path(dataset_root, "temp"), cache_dir = file.path(dataset_root, "cache"),
@@ -74,7 +89,7 @@ resolve_storage_paths <- function(config, project_root, output_root = NULL, crea
   all_paths <- unname(unlist(p[path_names], use.names = FALSE)); if (any(!vapply(all_paths, .descendant, logical(1), root = root))) stop("Resolved path escaped output root", call. = FALSE)
   if (create) {
     fs::dir_create(root, recurse = TRUE)
-    if (file.exists(p$root_marker)) { marker <- tryCatch(jsonlite::read_json(p$root_marker, simplifyVector=TRUE), error=function(e)NULL); if (is.null(marker) || !identical(marker$application, "cds-datagrab")) stop("Existing storage root marker is not owned by cds-datagrab", call.=FALSE); marker_dataset <- as.character(marker$dataset_id %||% ""); if (nzchar(marker_dataset) && !identical(marker_dataset, dataset)) stop("CDS_DATAGRAB_ROOT already belongs to variable '", marker_dataset, "'; use a variable-specific output root", call.=FALSE) } else jsonlite::write_json(list(application = "cds-datagrab", schema_version = 2L, dataset_id = dataset, created_utc = format(Sys.time(), tz = "UTC"), created_by = Sys.info()[["user"]]), p$root_marker, auto_unbox = TRUE, pretty = TRUE)
+    if (file.exists(p$root_marker)) { marker <- tryCatch(jsonlite::read_json(p$root_marker, simplifyVector=TRUE), error=function(e)NULL); if (is.null(marker) || !identical(marker$application, "cds-datagrab")) stop("Existing storage root marker is not owned by cds-datagrab", call.=FALSE) } else jsonlite::write_json(list(application = "cds-datagrab", schema_version = 3L, profiles = c("production", "smoke"), created_utc = format(Sys.time(), tz = "UTC"), created_by = Sys.info()[["user"]]), p$root_marker, auto_unbox = TRUE, pretty = TRUE)
     fs::dir_create(unname(unlist(p[c("raw_dir", "raw_quarantine_dir", "quarantine_dir", "extracted_dir", "daily_dir", "weekly_dir", "temp_dir", "cache_dir", "runs_root", "pipeline_log_dir", "slurm_log_dir")], use.names=FALSE)), recurse = TRUE)
   }
   p

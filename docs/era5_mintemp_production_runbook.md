@@ -9,7 +9,7 @@ This runbook covers the Atlas production backfill for `era5_mintemp`. It is inte
 - Configure a CDS token in the Atlas environment expected by `ecmwfr`; never put credentials in YAML, manifests, or logs.
 - Confirm the template and boundary are unchanged. The required template SHA256 is `4BE01F0ECAFF35216A72EB8F27E791311AF90D35B5A4FFF1E46A74EDB6DC633B`.
 
-The production root is `/project/disease_ecology/cds-datagrab-production-output`. It is separate from the repository and from smoke output. The production submit wrapper creates and validates `.cds-datagrab-root` before calling the shared submission machinery.
+The production root is `/project/disease_ecology/cds-datagrab-output`. It is separate from the repository and from smoke output. The production submit wrapper validates `.cds-datagrab-root` before calling the shared submission machinery.
 
 ## Configurations and dry plans
 
