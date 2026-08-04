@@ -1,5 +1,26 @@
 era5land_family_product_ids <- function() .era5land_product_ids()
 
+era5land_expected_dates <- function(config, start_date = NULL, end_date = NULL, dry_run = FALSE) {
+  window <- resolve_pipeline_date_window(config, start_date, end_date, dry_run)
+  safe_date_sequence(window$effective_start, window$effective_end)
+}
+
+era5land_request_for_date <- function(requests, date) {
+  date <- as.Date(date)
+  if (length(date) != 1L || is.na(date)) stop("Debug date must be a valid scalar date", call. = FALSE)
+  matches <- vapply(requests, function(x) date %in% as.Date(x$raw_request_dates), logical(1))
+  if (sum(matches) != 1L) stop("Expected exactly one configured family request containing debug date ", format(date), "; found ", sum(matches), call. = FALSE)
+  requests[[which(matches)]]
+}
+
+era5land_validate_debug_date <- function(date, family_dates) {
+  date <- as.Date(date)
+  family_dates <- as.Date(family_dates)
+  if (length(date) != 1L || is.na(date)) stop("Debug date must be a valid scalar date", call. = FALSE)
+  if (!(date %in% family_dates)) stop("Debug date ", format(date), " is outside the configured ERA5-Land request period", call. = FALSE)
+  invisible(date)
+}
+
 era5land_family_manifest <- function(run_dir, root, source_paths, request, cfg, products, status = "running") {
   m <- list(run_id = basename(run_dir), run_dir = run_dir, source_family_id = "era5land_daily_mean_utc06", profile = cfg$project$profile,
     resolved_output_root = root, output_root_source = source_paths$root_source, source_directory = source_paths$source_root,
@@ -78,7 +99,7 @@ run_era5land_daily_mean_family <- function(config_path = "config/era5land_daily_
   mode <- match.arg(mode); cfg <- read_pipeline_config(config_path); root <- resolve_project_root(dirname(config_path)); cfg <- resolve_config_paths(cfg, root, output_root, FALSE); cfg <- validate_pipeline_config(cfg)
   if (!identical(unname(as.character(cfg$project$source_family_id)), "era5land_daily_mean_utc06")) stop("Configuration is not an ERA5-Land daily-mean source-family configuration", call. = FALSE)
   if (!all(product_ids %in% .era5land_product_ids())) stop("Unknown ERA5-Land product selector", call. = FALSE)
-  window <- resolve_pipeline_date_window(cfg, start_date, end_date, dry_run); expected <- safe_date_sequence(window$effective_start, window$effective_end)
+  expected <- era5land_expected_dates(cfg, start_date, end_date, dry_run)
   source_paths <- resolve_source_storage_paths(cfg, root, output_root, create = TRUE)
   run_id <- paste0(format(Sys.time(), "%Y%m%dT%H%M%SZ", tz = "UTC"), "_", substr(digest::digest(list(cfg, mode, expected, product_ids), algo = "xxhash32"), 1, 8))
   run_dir <- file.path(source_paths$runs_root, run_id); fs::dir_create(run_dir, recurse = TRUE)

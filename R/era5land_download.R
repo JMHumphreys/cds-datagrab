@@ -54,7 +54,7 @@ validate_downloaded_target <- function(path, expected_request = NULL) {
 }
 
 download_result_row <- function(request, target, status, post, elapsed = NA_real_, returned = "", warnings = "", error_class = "", error_message = "", finalization = NULL) {
-  data.frame(target_filename = request$target, resolved_target_path = target, status = status, valid = post$valid, exists = post$exists,
+  data.frame(planned_target = request$target, target_filename = request$target, resolved_target_path = target, status = status, valid = post$valid, exists = post$exists,
     size = post$size, format = post$format, readable = post$readable, netcdf_metadata_readable = post$netcdf_metadata_readable,
     request_match = post$request_match, failure_reason = post$failure_reason, returned_path = returned, elapsed_seconds = elapsed,
     warnings = warnings, error_class = error_class, error_message = error_message,
