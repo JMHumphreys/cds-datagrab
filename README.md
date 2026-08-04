@@ -1,5 +1,7 @@
 # cds-datagrab
 
+ERA5-Land coverage repair is deliberately bounded: projection-created 8-neighbour components of at most four cells may use the unmasked nearest-neighbour donor; source-nodata and larger components fail validation with diagnostics. Daily outputs are validated before and after final promotion, and manifests retain repair counts, output checksums, reuse, and failure stages.
+
 `cds-datagrab` is a reproducible R-package workflow for retrieving environmental data from the Copernicus Climate Data Store (CDS), aligning source data to the protected study-area template, writing daily GeoTIFFs, and aggregating complete ISO weeks.
 
 The workflow keeps raw CDS responses, extracted source files, template-aligned daily rasters, weekly rasters, inventories, run manifests, and Slurm logs separate. Raw and derived products are resumable and are never written into the Git checkout.

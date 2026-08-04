@@ -1,5 +1,9 @@
 # Operator runbook
 
+## ERA5-Land coverage repair
+
+ERA5-Land processing retains unmasked bilinear and nearest-neighbour projections, classifies missing template cells before masking, and repairs only projection-created 8-neighbour components of at most four cells, subject to configured count/fraction limits. Source-nodata and larger components remain failures. Daily sidecars and run diagnostics record pre-repair missing cells, repaired cells, post-repair missing cells, outside-mask cells, component sizes, and source/projection classifications.
+
 Run one product and one calendar year at a time. Keep the shared production root for all products and years. Plan first, inspect the manifest, then execute.
 
 ## Common setup

@@ -9,4 +9,14 @@ library(cdsdatagrab)
 products <- value("--products", paste(era5land_family_product_ids(), collapse=","))
 ids <- strsplit(products,",",fixed=TRUE)[[1L]]
 ans <- run_era5land_daily_mean_family(config_path=config, mode=mode, dry_run=tolower(dry_run) %in% c("true","1","yes"), start_date=start, end_date=end, output_root=root, product_ids=ids)
-cat(sprintf("source family: era5land_daily_mean_utc06\nproducts: %s\nstatus: %s\nrun directory: %s\n",paste(ids,collapse=", "),ans$status,if(is.null(ans$run_dir)) "" else ans$run_dir))
+field <- function(x, name, default = NULL) if(!is.null(x[[name]])) x[[name]] else default
+manifest <- field(ans, "manifest", list())
+source <- field(ans, "source_diagnostic", list())
+cat(sprintf("source family: era5land_daily_mean_utc06\nproducts: %s\nstatus: %s\nfamily status: %s\nrun directory: %s\nraw reused: %s\narchive members: %s\nsource map rows: %s\nrequested product-dates: %s\ndaily outputs written: %s\ndaily outputs reused: %s\npre-repair missing cells: %s\nrepaired cells: %s\npost-repair missing cells: %s\nfailed products: %s\nfailed dates: %s\n",
+  paste(ids,collapse=", "),ans$status,field(ans,"family_status",ans$status),if(is.null(ans$run_dir)) "" else ans$run_dir,
+  field(source,"raw_reused",field(manifest,"raw_reused",NA)),field(source,"archive_member_count",NA),field(source,"source_map_rows",NA),
+  length(field(manifest,"requested_product_dates",character())),field(manifest,"daily_outputs_written",0),field(manifest,"daily_outputs_reused",0),
+  field(manifest,"pre_repair_missing_cells",0),field(manifest,"repaired_cells",0),field(manifest,"post_repair_missing_cells",0),
+  paste(field(manifest,"failed_products",character()),collapse=","),paste(field(manifest,"failed_product_dates",character()),collapse=",")))
+ok <- if(mode %in% c("plan","download") || tolower(dry_run) %in% c("true","1","yes")) ans$status %in% c("planned","downloaded") else identical(ans$status,"success")
+if(!ok) { cat(sprintf("ERA5-Land family failed: %s\n",ans$status),file=stderr()); quit(save="no",status=1L,runLast=FALSE) }

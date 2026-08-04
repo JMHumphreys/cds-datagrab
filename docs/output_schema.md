@@ -1,5 +1,7 @@
 # Output and provenance reference
 
+ERA5-Land family manifests are finalized with `family_status`, timestamps, product/date success and failure keys, raw/archive/extraction reuse flags, `CDS_contacted`, daily output counts, and aggregate coverage-repair counts. Product manifests additionally record `source_member`, `source_alias`, `failure_stage`, and `failure_message`. Daily sidecars record pre-repair, repaired, post-repair, and outside-mask counts, component sizes, source/projection classifications, final checksums, and successful reopen validation. The authoritative GeoTIFF is created only after temporary-file validation.
+
 The storage implementation creates this schema below the shared production or smoke root:
 
 ```text
