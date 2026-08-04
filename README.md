@@ -128,6 +128,7 @@ Common causes and remedies:
 - Missing packages: restore the external library and preserve the home library in `R_LIBS_USER`.
 - Commit mismatch: rerun `hpc/install_cdsdatagrab_atlas.sh`.
 - Smoke logs for production: set `PROFILE=production`; wrappers reject profile/config conflicts.
+- Wrappers resolve the profile from the YAML `project.profile` field. An explicitly supplied `PROFILE` is normalized and must match it; profile is never inferred from the configuration filename.
 - Multi-year guard: submit one calendar year or explicitly review `ALLOW_MULTIYEAR=true`.
 - Incomplete boundary week or unavailable future dates: expected; do not fabricate or submit out-of-window dates.
 - Output-root safety error: use an external shared root, never the repository checkout.

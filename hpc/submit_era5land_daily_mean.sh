@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"; REPO_DIR="${REPO_DIR:-${SLURM_SUBMIT_DIR:-$(cd "$SCRIPT_DIR/.." && pwd -P)}}"; source "$SCRIPT_DIR/lib/cds_datagrab_env.sh"
-PROFILE="${PROFILE:-smoke}"; CONFIG="${CONFIG:-config/era5land_daily_mean_utc06_${PROFILE}.yml}"; MODE="${MODE:-plan}"; DRY_RUN="${DRY_RUN:-true}"; START_DATE="${START_DATE:-}"; END_DATE="${END_DATE:-}"; PRODUCT="era5land_daily_mean_utc06"; PRODUCT_IDS="${PRODUCT_IDS:-era5land_tmean,era5land_soiltemp_l1_mean,era5land_soiltemp_l2_mean,era5land_soilwater_l1_mean,era5land_soilwater_l2_mean,era5land_surface_pressure_mean,era5land_lai_high_mean,era5land_lai_low_mean}"
+PROFILE="${PROFILE:-}"; CONFIG="${CONFIG:-config/era5land_daily_mean_utc06_smoke.yml}"; MODE="${MODE:-plan}"; DRY_RUN="${DRY_RUN:-true}"; START_DATE="${START_DATE:-}"; END_DATE="${END_DATE:-}"; PRODUCT="era5land_daily_mean_utc06"; PRODUCT_IDS="${PRODUCT_IDS:-era5land_tmean,era5land_soiltemp_l1_mean,era5land_soiltemp_l2_mean,era5land_soilwater_l1_mean,era5land_soilwater_l2_mean,era5land_surface_pressure_mean,era5land_lai_high_mean,era5land_lai_low_mean}"
 cds_datagrab_prepare_environment
 [[ -n "$START_DATE" || -n "$END_DATE" ]] && cds_datagrab_validate_window
 mkdir -p "$CDS_DATAGRAB_ROOT/logs/slurm/$PROFILE"

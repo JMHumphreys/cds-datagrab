@@ -73,6 +73,8 @@ Smoke outputs are disposable only after validation records are preserved. The in
 
 ## ERA5-Land daily-mean smoke acceptance
 
+All wrappers resolve the profile from `project.profile` in the YAML configuration. If `PROFILE` is supplied explicitly, it must match the configuration profile; the configuration filename is not used for profile inference.
+
 The family request is one monthly unarchived NetCDF containing eight variables. The first Atlas smoke is a three-day dry plan/execute sequence:
 
 ```bash
