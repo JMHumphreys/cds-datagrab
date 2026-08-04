@@ -31,7 +31,7 @@ ERA5 direct NetCDF is read with `ncdf4`; AgERA5 ZIP members are safely extracted
 
 ### ERA5-Land daily-mean family
 
-These eight additive products share one monthly `derived-era5-land-daily-statistics` NetCDF request (`daily_mean`, `utc-06:00`, `1_hourly`) and fan out into separate product directories. They do not replace the existing ERA5 minimum-temperature, soil-moisture, or low-LAI products.
+These eight additive products share one monthly `derived-era5-land-daily-statistics` request (`daily_mean`, `utc-06:00`, `1_hourly`) and fan out into separate product directories. CDS may return that request as a ZIP, with one NetCDF member per source variable; the pipeline detects containers by content, extracts members safely, and decodes `valid_time` CF units without shifting the UTC−6 labels again. Users should not manually unzip operational inputs. They do not replace the existing ERA5 minimum-temperature, soil-moisture, or low-LAI products.
 
 | Product | Source variable | Units | Daily meaning | Weekly rule |
 |---|---|---|---|---|
@@ -124,6 +124,7 @@ Common causes and remedies:
 
 - CDS HTTP/2 or transport failure: retain successful months and rerun the failed plan; do not delete the root.
 - `.netcdf` versus `.nc`: both are supported case-insensitively; content validation determines the reader.
+- ERA5-Land `NetCDF: Unknown file format` errors can mean ZIP bytes were mislabeled with an `.nc` suffix. The downloader normalizes content-based extensions and reuses the existing mislabeled artifact safely.
 - Missing GDAL NetCDF support: expected on some Atlas nodes; use the ncdf4 preflight/backend.
 - Missing packages: restore the external library and preserve the home library in `R_LIBS_USER`.
 - Commit mismatch: rerun `hpc/install_cdsdatagrab_atlas.sh`.

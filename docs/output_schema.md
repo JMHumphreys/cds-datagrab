@@ -26,6 +26,10 @@ data/<profile>/_sources/era5land_daily_mean_utc06/
 └── cache/
 ```
 
+ERA5-Land raw finalization is content-aware. A response initially transferred to `.partial/` is identified by magic bytes as `zip`, NetCDF classic, or NetCDF4/HDF5, checksum-verified, and atomically promoted to the matching deterministic extension. The observed eight-member response is retained as one shared ZIP, with extraction under `extracted/<request_hash>/`. Existing `.nc`-named ZIP artifacts are normalized in place after size/checksum verification; users must not manually rename them.
+
+Each extracted request contains `member_inventory.csv` and `source_map.csv`. The inventory records archive/member checksums, member names and sizes, extracted paths, container and NetCDF inspection status, product ID, CDS variable, environmental alias, source units, dimension names/lengths, time dimension, and decoded dates. The source map has one row per product/date (24 rows for the three-day family smoke) and records request hash, product, alias, archive member, units, time index, source date, and output date. Scalar metadata variables such as `number` are ignored.
+
 Product daily and weekly outputs remain under `data/<profile>/<product_id>/`. Source and product run manifests record `source_family_id`, `request_hash`, `shared_raw_path`, requested variables, returned daily time zone, frequency, and source-to-product date mappings. Shared raw files must not be removed while any product lineage references their request hash.
 
 The conceptual CDS request for each calendar month is one multi-variable request (the area is always derived from the protected template and configured buffer):
@@ -45,7 +49,7 @@ Daily filenames are `<prefix>_YYYY-MM-DD.tif`; weekly filenames are `<prefix>_YY
 
 Run directories contain `run_manifest.json`, planned dates, request/download manifests, daily and weekly inventories, date-source maps, stage logs, and diagnostics. Provenance includes source and installed Git commits, installed package path, R library paths, variable-spec hash, request hashes, raw checksums, decoded source dates, output units, template checksum, and validation flags. New manifests also record `resolved_output_root`, `output_root_source`, `profile`, `product_id`, `data_directory`, `run_directory`, and `slurm_log_directory`.
 
-Raw inventories distinguish active, reused matching, duplicate, superseded, unmatched, invalid, and quarantined files. `.nc` and `.netcdf` are equivalent extensions for discovery; content validation selects ncdf4. AgERA5 `date_source_map.csv` maps each requested date to an extracted member rather than the ZIP container.
+Raw inventories distinguish active, reused matching, duplicate, superseded, unmatched, invalid, and quarantined files. `.nc`, `.netcdf`, and `.zip` are equivalent discovery candidates; magic-byte validation selects the reader. Stale identical `.partial` files are removed only after the finalized artifact is verified; different partials are retained for inspection. AgERA5 `date_source_map.csv` maps each requested date to an extracted member rather than the ZIP container.
 
 Daily inventories record filename validity, observed/estimated state, raster validity, date, checksum, geometry, and value-range checks. Weekly inventories record ISO year/week, required seven dates, available dates, aggregation status, validity, and reuse state. Production and smoke profiles are isolated by directory and must use distinct external roots.
 

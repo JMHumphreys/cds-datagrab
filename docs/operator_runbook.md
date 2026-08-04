@@ -75,7 +75,7 @@ Smoke outputs are disposable only after validation records are preserved. The in
 
 All wrappers resolve the profile from `project.profile` in the YAML configuration. If `PROFILE` is supplied explicitly, it must match the configuration profile; the configuration filename is not used for profile inference.
 
-The family request is one monthly unarchived NetCDF containing eight variables. The first Atlas smoke is a three-day dry plan/execute sequence:
+The family request is one monthly response containing eight variables. CDS may return a ZIP containing eight separate NetCDF members, one per source variable. The pipeline detects the container by magic bytes, extracts into the shared request cache, maps each member to its registered alias, and does not apply a second UTC−6 shift to `valid_time` labels. Do not manually unzip or rename operational inputs. The first Atlas smoke is a three-day dry plan/execute sequence:
 
 ```bash
 export REPO_DIR=/project/disease_ecology/cds-datagrab
