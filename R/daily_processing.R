@@ -43,7 +43,7 @@ promote_validated_daily_output <- function(raster, output_path, template, spec, 
 }
 
 process_downloaded_variable <- function(raw_files,daily_dir,template_path,bbox_path,config,variable_spec=NULL,overwrite_dates=NULL,expected_dates=NULL,run_dir=NULL,run_expected_dates=NULL,request_manifest=NULL,date_source_map=NULL) {
-  agera5_diagnostics <- list(); agera5_member_map <- NULL
+  coverage_records <- list(); agera5_diagnostics <- list(); agera5_member_map <- NULL
   spec <- variable_spec %||% get_variable_spec(config$project$dataset_id,config)
   run_expected_dates <- normalize_date_vector(run_expected_dates %||% expected_dates,"run_expected_dates")
   agera5_member_dates <- setNames(as.Date(character()),character()); agera5_member_hashes <- setNames(character(),character())
@@ -63,7 +63,7 @@ process_downloaded_variable <- function(raw_files,daily_dir,template_path,bbox_p
   if(!is.null(request_manifest)&&!is.null(date_source_map)) validate_date_source_map(date_source_map,raw_files,request_manifest)
   fs::dir_create(daily_dir,recurse=TRUE); template <- terra::rast(template_path); before <- template_fingerprint(template)
   boundary <- if(isTRUE(config$spatial$mask_to_boundary)) sf::st_read(bbox_path,quiet=TRUE) else NULL
-  written <- reused <- replaced <- failed <- character(); readers <- list(); processing_failures <- list(); coverage_records <- list(); date_results <- list()
+  written <- reused <- replaced <- failed <- character(); readers <- list(); processing_failures <- list(); date_results <- list()
   condition_details <- function(e) {
     call <- tryCatch(conditionCall(e), error = function(err) NULL)
     list(condition_class = class(e), condition_message = conditionMessage(e), condition_call = if (is.null(call)) NULL else paste(deparse(call), collapse = " "),
@@ -98,7 +98,7 @@ process_downloaded_variable <- function(raw_files,daily_dir,template_path,bbox_p
       tryCatch({
         bilinear <- terra::project(x$rasters[[i]],template,method=config$processing$resampling_method)
         nearest <- terra::project(x$rasters[[i]],template,method="near")
-        coverage_result <- analyze_template_coverage(bilinear,nearest,x$rasters[[i]],template,mask_template=isTRUE(config$spatial$mask_to_template),maximum_repair_count=config$validation$coverage_max_repair_count%||%256L,maximum_repair_fraction=config$validation$coverage_max_repair_fraction%||%0.01,maximum_component_size=config$validation$coverage_max_component_size%||%4L,maximum_donor_radius_cells=config$validation$coverage_max_donor_radius_cells%||%2L,maximum_donor_radius_km=config$validation$coverage_max_donor_radius_km%||%NULL,donor_count=config$validation$coverage_donor_count%||%8L,source_range=spec$source_hard_valid_range%||%spec$hard_valid_range,diagnostics_dir=if(isTRUE(config$spatial$write_coverage_diagnostics)&&!is.null(run_dir)) file.path(run_dir,"diagnostics","coverage") else NULL,date=d,prefix=spec$daily_filename_prefix)
+        coverage_result <- analyze_template_coverage(bilinear,nearest,x$rasters[[i]],template,mask_template=isTRUE(config$spatial$mask_to_template),maximum_repair_count=config$validation$coverage_max_repair_count%||%256L,maximum_repair_fraction=config$validation$coverage_max_repair_fraction%||%0.01,maximum_component_size=config$validation$coverage_max_component_size%||%4L,maximum_donor_radius_cells=config$validation$coverage_max_donor_radius_cells%||%2L,maximum_donor_radius_km=config$validation$coverage_max_donor_radius_km%||%NULL,donor_count=config$validation$coverage_donor_count%||%8L,maximum_source_buffer_km=config$validation$coverage_max_source_buffer_km%||%35,source_range=spec$source_hard_valid_range%||%spec$hard_valid_range,diagnostics_dir=if(isTRUE(config$spatial$write_coverage_diagnostics)&&!is.null(run_dir)) file.path(run_dir,"diagnostics","coverage") else NULL,date=d,prefix=spec$daily_filename_prefix)
         coverage_records[[length(coverage_records)+1L]] <<- c(list(date=as.character(d),variable_id=spec$id),coverage_result$diagnostics)
         coverage_recorded <- TRUE
         if(coverage_result$unresolved_count>0L&&isTRUE(config$spatial$require_complete_template_coverage%||%TRUE)) { reasons <- unique(Filter(nzchar, vapply(coverage_result$component_records, function(x) x$repair_failure_reason %||% "", character(1)))); stop(sprintf("Template coverage incomplete: missing_inside_count=%d outside_mask_count=%d repair_failure_reasons=%s",coverage_result$unresolved_count,coverage_result$outside_mask_count,if(length(reasons)) paste(reasons,collapse=";") else "not_available")) }

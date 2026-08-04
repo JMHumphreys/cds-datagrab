@@ -64,7 +64,7 @@ test_that("same-cell missing nearest uses an original local donor", {
   bilinear <- template; nearest <- template; source <- template
   terra::values(bilinear) <- NA; terra::values(nearest) <- NA; terra::values(source) <- 1; terra::values(template) <- NA
   donor <- terra::cellFromRowCol(template, 2, 2); target <- terra::cellFromRowCol(template, 3, 3)
-  terra::values(template)[target] <- 1; terra::values(bilinear)[donor] <- 42
+  terra::values(template)[c(target, donor)] <- 1; terra::values(bilinear)[donor] <- 42
   result <- analyze_template_coverage(bilinear, nearest, source, template, maximum_repair_count = 4L, maximum_repair_fraction = 1, maximum_donor_radius_cells = 2L)
   expect_true(result$repair_applied)
   expect_equal(terra::values(result$raster, mat = FALSE)[target], 42)
@@ -80,7 +80,7 @@ test_that("local donor search expands to radius two but not beyond", {
     bilinear <- template; nearest <- template; source <- template
     terra::values(bilinear) <- NA; terra::values(nearest) <- NA; terra::values(source) <- 1; terra::values(template) <- NA
     target <- terra::cellFromRowCol(template, 4, 4); donor <- terra::cellFromRowCol(template, donor_row, donor_col)
-    terra::values(template)[target] <- 1; terra::values(bilinear)[donor] <- 7
+    terra::values(template)[c(target, donor)] <- 1; terra::values(bilinear)[donor] <- 7
     list(template = template, bilinear = bilinear, nearest = nearest, source = source, target = target)
   }
   radius_two <- make_case(2, 2)
@@ -90,7 +90,7 @@ test_that("local donor search expands to radius two but not beyond", {
   radius_three <- make_case(1, 1)
   rejected <- analyze_template_coverage(radius_three$bilinear, radius_three$nearest, radius_three$source, radius_three$template, maximum_repair_count = 4L, maximum_repair_fraction = 1, maximum_donor_radius_cells = 2L)
   expect_false(rejected$repair_applied)
-  expect_equal(rejected$component_records[[1]]$repair_failure_reason, "no_valid_donor_within_radius")
+  expect_match(rejected$component_records[[1]]$repair_failure_reason, "no_(valid_donor_within_radius|source_land_support)")
   expect_equal(rejected$unresolved_count, 1)
 })
 
@@ -101,13 +101,13 @@ test_that("component repair is atomic and never self-propagates", {
   bilinear <- template; nearest <- template; source <- template
   terra::values(bilinear) <- NA; terra::values(nearest) <- NA; terra::values(source) <- 1; terra::values(template) <- NA
   targets <- terra::cellFromRowCol(template, 4:5, 4)
-  terra::values(template)[targets] <- 1; donor <- terra::cellFromRowCol(template, 2, 2); terra::values(bilinear)[donor] <- 9
+  donor <- terra::cellFromRowCol(template, 2, 2); terra::values(template)[c(targets, donor)] <- 1; terra::values(bilinear)[donor] <- 9
   result <- analyze_template_coverage(bilinear, nearest, source, template, maximum_repair_count = 4L, maximum_repair_fraction = 1, maximum_donor_radius_cells = 2L)
   expect_false(result$repair_applied)
   expect_equal(result$repair_count, 0)
   expect_equal(result$unresolved_count, 2)
   expect_true(result$component_records[[1]]$repair_attempted)
-  expect_match(result$component_records[[1]]$repair_failure_reason, "no_valid_donor")
+  expect_match(result$component_records[[1]]$repair_failure_reason, "no_(valid_donor|source_land_support)")
   expect_equal(sum(as.numeric(result$diagnostics$repaired_cell_ids %||% integer()) > 0), 0)
   expect_equal(result$repair_count, result$missing_inside_count - result$unresolved_count)
 })
@@ -125,4 +125,43 @@ test_that("failed product results retain date diagnostics and original error fie
   expect_equal(result$failure_message, "no valid donor within radius")
   expect_equal(result$condition_call, "stop(...)")
   expect_equal(result$date_results[[1]]$failure_message, "no valid donor within radius")
+})
+
+test_that("donor pools preserve full terra cell numbers and values", {
+  skip_if_not_installed("terra")
+  template <- terra::rast(nrows = 5, ncols = 5, xmin = 0, xmax = 5, ymin = 0, ymax = 5, crs = "EPSG:4326")
+  terra::values(template) <- NA_real_; target <- terra::cellFromRowCol(template, 3, 3); donor <- terra::cellFromRowCol(template, 2, 2); terra::values(template)[c(target, donor)] <- 1
+  projected <- template; terra::values(projected) <- NA_real_; terra::values(projected)[donor] <- 42
+  pool <- cdsdatagrab:::era5land_donor_pool(projected, template, c(-Inf, Inf))
+  expect_identical(pool$cells, as.integer(donor)); expect_identical(pool$values, 42)
+  expect_true(donor %in% cdsdatagrab:::era5land_ring_cells(template, target, 1L))
+  result <- analyze_template_coverage(projected, projected, template, template, maximum_repair_count = 4L, maximum_repair_fraction = 1, maximum_donor_radius_cells = 1L)
+  expect_equal(result$repair_count, 1L); expect_equal(result$details[[1]]$donor_cells, donor); expect_equal(result$details[[1]]$selected_value, 42)
+})
+
+test_that("source footprint fallback uses fine source pixels and records support", {
+  skip_if_not_installed("terra")
+  template <- terra::rast(nrows = 1, ncols = 1, xmin = 0, xmax = 1, ymin = 0, ymax = 1, crs = "EPSG:4326"); terra::values(template) <- 1
+  bilinear <- template; nearest <- template; terra::values(bilinear) <- NA; terra::values(nearest) <- NA
+  source <- terra::rast(nrows = 10, ncols = 10, xmin = 0, xmax = 1, ymin = 0, ymax = 1, crs = "EPSG:4326"); terra::values(source) <- NA_real_; terra::values(source)[c(45, 46)] <- c(10, 20)
+  result <- analyze_template_coverage(bilinear, nearest, source, template, maximum_repair_count = 4L, maximum_repair_fraction = 1, maximum_donor_radius_cells = 1L, maximum_source_buffer_km = 35)
+  expect_true(result$repaired); expect_match(result$details[[1]]$donor_method, "source_footprint"); expect_equal(result$details[[1]]$source_footprint_donor_count, 2L); expect_equal(result$details[[1]]$source_cell_count, 2L); expect_equal(result$details[[1]]$selected_value, 15)
+})
+
+test_that("source fallback fails explicitly without support", {
+  skip_if_not_installed("terra")
+  template <- terra::rast(nrows = 1, ncols = 1, xmin = 0, xmax = 1, ymin = 0, ymax = 1, crs = "EPSG:4326"); terra::values(template) <- 1
+  bilinear <- template; nearest <- template; terra::values(bilinear) <- NA; terra::values(nearest) <- NA
+  source <- terra::rast(nrows = 10, ncols = 10, xmin = 0, xmax = 1, ymin = 0, ymax = 1, crs = "EPSG:4326"); terra::values(source) <- NA_real_
+  result <- analyze_template_coverage(bilinear, nearest, source, template, maximum_repair_count = 4L, maximum_repair_fraction = 1, maximum_donor_radius_cells = 1L, maximum_source_buffer_km = 35)
+  expect_false(result$repaired); expect_equal(result$unresolved_count, 1L); expect_equal(result$component_records[[1]]$repair_failure_reason, "no_source_land_support"); expect_true(result$component_records[[1]]$repair_eligible); expect_true(result$component_records[[1]]$repair_attempted)
+})
+
+test_that("source buffer is bounded and does not use distant target-grid donors", {
+  skip_if_not_installed("terra")
+  template <- terra::rast(nrows = 1, ncols = 1, xmin = 0, xmax = 0.1, ymin = 0, ymax = 0.1, crs = "EPSG:4326"); terra::values(template) <- 1
+  bilinear <- template; nearest <- template; terra::values(bilinear) <- NA; terra::values(nearest) <- NA
+  source <- terra::rast(nrows = 50, ncols = 50, xmin = -0.2, xmax = 0.3, ymin = -0.2, ymax = 0.3, crs = "EPSG:4326"); terra::values(source) <- NA_real_; terra::values(source)[terra::cellFromRowCol(source, 25, 31)] <- 30
+  result <- analyze_template_coverage(bilinear, nearest, source, template, maximum_repair_count = 4L, maximum_repair_fraction = 1, maximum_donor_radius_cells = 1L, maximum_source_buffer_km = 35)
+  expect_true(result$repaired); expect_equal(result$details[[1]]$donor_method, "source_buffer_nearest"); expect_lte(result$details[[1]]$maximum_source_distance_km, 35); expect_equal(result$details[[1]]$source_buffer_donor_count, 1L)
 })
