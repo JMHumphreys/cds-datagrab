@@ -1,5 +1,7 @@
 # cds-datagrab
 
+For ERA5-Land source-mask gaps, the same-cell nearest projection can also be missing. The repair hierarchy searches original unmasked projected target-grid donors in configurable radius-1 and radius-2 rings (default radius two, approximately 50 km), using up to eight inverse-distance donors. Donors are never repaired cells, and a component is accepted only when every cell is repaired. Component CSV diagnostics and failed product manifests retain donor distances, reasons, original exceptions, and product/date status. Use `scripts/debug_era5land_slice.R` for one product/date before repeating a family smoke run.
+
 ERA5-Land coverage repair is deliberately bounded: projection-created 8-neighbour components of at most four cells may use the unmasked nearest-neighbour donor; source-nodata and larger components fail validation with diagnostics. Daily outputs are validated before and after final promotion, and manifests retain repair counts, output checksums, reuse, and failure stages.
 
 `cds-datagrab` is a reproducible R-package workflow for retrieving environmental data from the Copernicus Climate Data Store (CDS), aligning source data to the protected study-area template, writing daily GeoTIFFs, and aggregating complete ISO weeks.

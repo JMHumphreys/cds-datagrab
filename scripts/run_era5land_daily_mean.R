@@ -19,4 +19,13 @@ cat(sprintf("source family: era5land_daily_mean_utc06\nproducts: %s\nstatus: %s\
   field(manifest,"pre_repair_missing_cells",0),field(manifest,"repaired_cells",0),field(manifest,"post_repair_missing_cells",0),
   paste(field(manifest,"failed_products",character()),collapse=","),paste(field(manifest,"failed_product_dates",character()),collapse=",")))
 ok <- if(mode %in% c("plan","download") || tolower(dry_run) %in% c("true","1","yes")) ans$status %in% c("planned","downloaded") else identical(ans$status,"success")
-if(!ok) { cat(sprintf("ERA5-Land family failed: %s\n",ans$status),file=stderr()); quit(save="no",status=1L,runLast=FALSE) }
+if(!ok) {
+  failed <- field(manifest,"failed_product_dates",character())
+  first <- field(manifest,"product_results",list())
+  failed_results <- if(length(first)) Filter(function(x) identical(field(x,"status"), "failed"), first) else list()
+  first_failure <- if(length(failed_results)) failed_results[[1L]] else if(length(first)) first[[1L]] else manifest
+  cat(sprintf("ERA5-Land processing failed:\nproduct=%s\ndate=%s\nstage=%s\nmessage=%s\nfailed_product_dates=%d\n",
+    field(first_failure,"product_id",NA_character_), field(first_failure,"failed_dates",NA_character_)[1L], field(first_failure,"failure_stage",field(manifest,"failure_stage",NA_character_)),
+    field(first_failure,"failure_message",field(manifest,"failure_message",ans$status)), length(failed)), file=stderr())
+  quit(save="no",status=1L,runLast=FALSE)
+}

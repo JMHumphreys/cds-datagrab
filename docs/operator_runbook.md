@@ -1,5 +1,7 @@
 # Operator runbook
 
+When both bilinear and same-cell nearest are missing, the bounded local donor search checks radius one and then radius two target-grid cells, using only original finite projected values and at most eight inverse-distance donors. It records the actual cell/km distance and explicit failure reason. Components are repaired atomically: if any cell lacks an accepted donor, no cell in that component is finalized. Before repeating all 24 product-date combinations, run `Rscript scripts/debug_era5land_slice.R --config config/era5land_daily_mean_utc06_smoke.yml --product era5land_tmean --date 2026-02-01 --output-root /project/disease_ecology/cds-datagrab-smoke-output`.
+
 ## ERA5-Land coverage repair
 
 ERA5-Land processing retains unmasked bilinear and nearest-neighbour projections, classifies missing template cells before masking, and repairs only projection-created 8-neighbour components of at most four cells, subject to configured count/fraction limits. Source-nodata and larger components remain failures. Daily sidecars and run diagnostics record pre-repair missing cells, repaired cells, post-repair missing cells, outside-mask cells, component sizes, and source/projection classifications.

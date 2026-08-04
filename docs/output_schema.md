@@ -1,5 +1,7 @@
 # Output and provenance reference
 
+Coverage component records include target cells, exact and local donor counts, maximum donor distance in cells and kilometres, eligibility, attempted/repaired state, donor method, and failure reason. `repair_components_<product>_<date>.csv` accompanies the four masks. Product results are written for every requested product even on failure; each contains date results and the original condition class, message, call, and bounded call-stack summary. Family totals aggregate failed and successful date results, and unavailable counts are represented as `null`/not available rather than zero.
+
 ERA5-Land family manifests are finalized with `family_status`, timestamps, product/date success and failure keys, raw/archive/extraction reuse flags, `CDS_contacted`, daily output counts, and aggregate coverage-repair counts. Product manifests additionally record `source_member`, `source_alias`, `failure_stage`, and `failure_message`. Daily sidecars record pre-repair, repaired, post-repair, and outside-mask counts, component sizes, source/projection classifications, final checksums, and successful reopen validation. The authoritative GeoTIFF is created only after temporary-file validation.
 
 The storage implementation creates this schema below the shared production or smoke root:

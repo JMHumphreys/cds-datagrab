@@ -1,5 +1,7 @@
 # Production validation summary
 
+ERA5-Land local-gap handling is bounded and fully audited. A missing bilinear cell may also have a missing same-cell nearest value because of the source land mask; the implementation searches original unmasked projected donors within configurable radius two (approximately 50 km), uses up to eight inverse-distance donors, and never propagates an imputed value. Components larger than four cells, unsupported cells, invalid-range candidates, and components with incomplete donor support remain failed. Failed product manifests are always finalized with the original product/date exception, component diagnostics, and aggregate pre/post counts. The isolated runner `scripts/debug_era5land_slice.R` is the recommended first validation step for future Atlas smoke debugging.
+
 This summary records validated behavior without inventing unavailable live-run counts.
 
 The consolidated-root migration was verified by matching file counts, matching byte totals, checksum-mode `rsync` comparisons, successful planning tests for all four products, and zero newly planned dates after switching to the consolidated root. No live counts are invented here. The template SHA256 remains `4BE01F0ECAFF35216A72EB8F27E791311AF90D35B5A4FFF1E46A74EDB6DC633B`.
