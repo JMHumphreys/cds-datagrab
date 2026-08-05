@@ -190,6 +190,45 @@ test_that("coverage failure returns diagnostics without masking the original err
   expect_false(grepl("object 'coverage_records' not found", result$processing_failures[[1]]$condition_message, fixed = TRUE))
 })
 
+test_that("successful daily output records each date result after finalization", {
+  skip_if_not_installed("terra")
+  skip_if_not_installed("ncdf4")
+  base <- file.path(getwd(), ".test-era5land-date-results")
+  dir.create(base, recursive = TRUE, showWarnings = FALSE)
+  on.exit(unlink(base, recursive = TRUE, force = TRUE), add = TRUE)
+  raw_path <- file.path(base, "tmean.nc")
+  lon <- ncdf4::ncdim_def("longitude", "degrees_east", c(0.25, 0.75))
+  lat <- ncdf4::ncdim_def("latitude", "degrees_north", c(0.25, 0.75))
+  tm <- ncdf4::ncdim_def("valid_time", "hours since 2026-02-01 00:00:00", c(0, 24))
+  variable <- ncdf4::ncvar_def("t2m", "K", list(lon, lat, tm), -9999, prec = "double")
+  nc <- ncdf4::nc_create(raw_path, list(variable), force_v4 = TRUE)
+  ncdf4::ncvar_put(nc, variable, array(273.15, dim = c(2, 2, 2)))
+  ncdf4::nc_close(nc)
+  template <- terra::rast(nrows = 2, ncols = 2, xmin = 0, xmax = 1, ymin = 0, ymax = 1, crs = "EPSG:4326")
+  terra::values(template) <- 1
+  template_path <- file.path(base, "template.tif")
+  terra::writeRaster(template, template_path, overwrite = TRUE)
+  spec <- get_variable_spec("era5land_tmean")
+  cfg <- list(
+    project = list(dataset_id = spec$id, profile = "smoke"),
+    spatial = list(mask_to_template = TRUE, mask_to_boundary = FALSE, require_complete_template_coverage = TRUE),
+    processing = list(resampling_method = "bilinear", datatype = "FLT4S", naflag = -9999),
+    validation = list(coverage_max_repair_count = 4L, coverage_max_repair_fraction = 1, coverage_max_component_size = 4L, coverage_max_donor_radius_cells = 1L, coverage_max_source_buffer_km = 35, coverage_donor_count = 8L, hard_tolerance = 1e-6, require_exact_template_geometry = TRUE)
+  )
+  dates <- as.Date("2026-02-01") + 0:1
+  result <- process_downloaded_variable(raw_path, file.path(base, "daily"), template_path, NA_character_, cfg, spec, expected_dates = dates, run_expected_dates = dates, run_dir = file.path(base, "run"))
+  expect_length(result$failed, 0L)
+  expect_length(result$written, 2L)
+  expect_length(result$date_results, 2L)
+  expect_identical(names(result$date_results), as.character(dates))
+  expect_equal(unname(vapply(result$date_results, `[[`, character(1), "status")), c("success", "success"))
+  expect_equal(unname(vapply(result$date_results, `[[`, character(1), "date")), as.character(dates))
+  expect_true(all(vapply(result$date_results, function(x) file.exists(x$output_path), logical(1))))
+  expect_true(all(vapply(result$date_results, function(x) is.list(x$coverage), logical(1))))
+  expect_true(all(vapply(result$date_results, function(x) isTRUE(x$output_sha256 != ""), logical(1))))
+  expect_length(list.files(file.path(base, "daily"), pattern = "\\.tmp-", full.names = TRUE), 0L)
+})
+
 test_that("source footprint fallback uses fine source pixels and records support", {
   skip_if_not_installed("terra")
   template <- terra::rast(nrows = 1, ncols = 1, xmin = 0, xmax = 1, ymin = 0, ymax = 1, crs = "EPSG:4326"); terra::values(template) <- 1
