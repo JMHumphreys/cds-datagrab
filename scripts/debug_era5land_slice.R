@@ -62,6 +62,25 @@ result <- process_downloaded_variable(member$extracted_path, p$daily_dir, cfg$sp
   overwrite_dates = date, expected_dates = date, run_expected_dates = date, request_manifest = list(member_request), date_source_map = member_map, run_dir = run_dir)
 if (length(result$coverage_diagnostics)) {
   for (record in result$coverage_diagnostics) {
+    geometry <- record$donor_geometry %||% list()
+    if (length(geometry)) {
+      cat(sprintf("bilinear donor geometry matches template: %s\n", tolower(as.character(geometry$bilinear$compare_geom))))
+      cat(sprintf("nearest donor geometry matches template: %s\n", tolower(as.character(geometry$nearest$compare_geom))))
+      cat(sprintf("full donor vector length: template=%s bilinear=%s nearest=%s\n", record$full_value_vector_lengths[["template"]], record$full_value_vector_lengths[["bilinear"]], record$full_value_vector_lengths[["nearest"]]))
+      cat(sprintf("donor validation range (processed units): [%s, %s]\n", record$source_range[[1L]], record$source_range[[2L]]))
+    }
+    cat(sprintf("target-grid supported: radius1=%s radius2=%s total=%s source-fallback-attempted=%s\n", record$target_ring_radius_1_supported_count %||% NA, record$target_ring_radius_2_supported_count %||% NA, record$target_grid_supported_count %||% NA, record$source_fallback_attempted_count %||% NA))
+    for (detail in utils::head(record$details %||% list(), 3L)) {
+      for (candidate in utils::head(detail$candidate_diagnostics %||% list(), 8L)) {
+        cat(sprintf("donor-candidate: target=%s candidate=%s row=%s col=%s inside=%s bilinear=%s nearest=%s in_bilinear_pool=%s in_nearest_pool=%s\n", candidate$target_cell, candidate$candidate_cell, candidate$candidate_row, candidate$candidate_column, candidate$template_inside, candidate$bilinear_value, candidate$nearest_value, candidate$candidate_in_bilinear_donor_pool, candidate$candidate_in_nearest_donor_pool))
+      }
+    }
+    known_details <- Filter(function(detail) any(vapply(detail$candidate_diagnostics %||% list(), function(candidate) identical(as.integer(candidate$target_cell), 6159L) || identical(as.integer(candidate$candidate_cell), 5866L), logical(1))), record$details %||% list())
+    for (detail in known_details) {
+      for (candidate in detail$candidate_diagnostics) {
+        if (identical(as.integer(candidate$target_cell), 6159L) || identical(as.integer(candidate$candidate_cell), 5866L)) cat(sprintf("known-donor-candidate: target=%s candidate=%s row=%s col=%s inside=%s bilinear=%s nearest=%s in_bilinear_pool=%s in_nearest_pool=%s\n", candidate$target_cell, candidate$candidate_cell, candidate$candidate_row, candidate$candidate_column, candidate$template_inside, candidate$bilinear_value, candidate$nearest_value, candidate$candidate_in_bilinear_donor_pool, candidate$candidate_in_nearest_donor_pool))
+      }
+    }
     cat(sprintf("coverage: date=%s pre=%s components=%s repaired=%s post=%s outside=%s\n", record$date %||% date, record$missing_inside_pre_repair_count %||% NA, length(record$component_records %||% list()), record$repair_count %||% NA, record$missing_inside_post_repair_count %||% NA, record$outside_mask_count %||% NA))
     if (length(record$component_records)) print(utils::head(utils::read.csv(record$coverage_diagnostic_paths[["component_csv"]]), 20L))
   }

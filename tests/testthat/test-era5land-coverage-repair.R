@@ -137,6 +137,55 @@ test_that("donor pools preserve full terra cell numbers and values", {
   expect_true(donor %in% cdsdatagrab:::era5land_ring_cells(template, target, 1L))
   result <- analyze_template_coverage(projected, projected, template, template, maximum_repair_count = 4L, maximum_repair_fraction = 1, maximum_donor_radius_cells = 1L)
   expect_equal(result$repair_count, 1L); expect_equal(result$details[[1]]$donor_cells, donor); expect_equal(result$details[[1]]$selected_value, 42)
+  candidate <- Filter(function(x) identical(x$candidate_cell, as.integer(donor)), result$details[[1]]$candidate_diagnostics)[[1L]]
+  expect_equal(candidate$bilinear_value, 42); expect_equal(candidate$nearest_value, 42); expect_true(candidate$candidate_in_bilinear_donor_pool); expect_true(candidate$candidate_in_nearest_donor_pool)
+})
+
+test_that("shifted same-size donor rasters cannot reuse template cell numbers", {
+  skip_if_not_installed("terra")
+  template <- terra::rast(nrows = 4, ncols = 4, xmin = 0, xmax = 4, ymin = 0, ymax = 4, crs = "EPSG:4326")
+  shifted <- terra::rast(nrows = 4, ncols = 4, xmin = 0.25, xmax = 4.25, ymin = 0, ymax = 4, crs = "EPSG:4326")
+  terra::values(template) <- 1; terra::values(shifted) <- 2
+  expect_equal(terra::ncell(template), terra::ncell(shifted))
+  expect_false(terra::compareGeom(shifted, template, stopOnError = FALSE))
+  expect_error(cdsdatagrab:::era5land_donor_pool(shifted, template, c(-Inf, Inf)), "geometry")
+  expect_error(analyze_template_coverage(shifted, shifted, shifted, template, mask_template = FALSE, maximum_repair_count = 4L, maximum_repair_fraction = 1), "geometry")
+})
+
+test_that("ERA5-Land donor validation uses processed output units", {
+  spec <- get_variable_spec("era5land_tmean")
+  expect_equal(spec$source_hard_valid_range, c(150, 380))
+  expect_equal(spec$hard_valid_range, c(-100, 70))
+  expect_true(cdsdatagrab:::era5land_donor_is_valid(0, spec$hard_valid_range))
+  expect_false(cdsdatagrab:::era5land_donor_is_valid(0, spec$source_hard_valid_range))
+})
+
+test_that("coverage failure returns diagnostics without masking the original error", {
+  skip_if_not_installed("terra")
+  skip_if_not_installed("ncdf4")
+  base <- file.path(getwd(), ".test-era5land-coverage-failure-scope")
+  dir.create(base, recursive = TRUE, showWarnings = FALSE)
+  on.exit(unlink(base, recursive = TRUE, force = TRUE), add = TRUE)
+  raw_path <- file.path(base, "tmean.nc")
+  lon <- ncdf4::ncdim_def("longitude", "degrees_east", c(10, 11))
+  lat <- ncdf4::ncdim_def("latitude", "degrees_north", c(10, 11))
+  tm <- ncdf4::ncdim_def("valid_time", "hours since 2026-02-01 00:00:00", c(0, 24))
+  variable <- ncdf4::ncvar_def("t2m", "K", list(lon, lat, tm), -9999, prec = "double")
+  nc <- ncdf4::nc_create(raw_path, list(variable), force_v4 = TRUE)
+  ncdf4::ncvar_put(nc, variable, array(rep(273.15, 8), dim = c(2, 2, 2)))
+  ncdf4::nc_close(nc)
+  template <- terra::rast(nrows = 1, ncols = 1, xmin = 0, xmax = 1, ymin = 0, ymax = 1, crs = "EPSG:4326")
+  terra::values(template) <- 1
+  template_path <- file.path(base, "template.tif"); terra::writeRaster(template, template_path, overwrite = TRUE)
+  spec <- get_variable_spec("era5land_tmean")
+  cfg <- list(project = list(dataset_id = spec$id, profile = "smoke"), spatial = list(mask_to_template = TRUE, mask_to_boundary = FALSE, require_complete_template_coverage = TRUE), processing = list(resampling_method = "bilinear", datatype = "FLT4S", naflag = -9999), validation = list(coverage_max_repair_count = 4L, coverage_max_repair_fraction = 1, coverage_max_component_size = 4L, coverage_max_donor_radius_cells = 1L, coverage_max_source_buffer_km = 35, coverage_donor_count = 8L, hard_tolerance = 1e-6, require_exact_template_geometry = TRUE))
+  dates <- as.Date("2026-02-01") + 0:1
+  result <- process_downloaded_variable(raw_path, file.path(base, "daily"), template_path, NA_character_, cfg, spec, expected_dates = dates, run_expected_dates = dates, run_dir = file.path(base, "run"))
+  expect_length(result$failed, 2L)
+  expect_length(result$coverage_diagnostics, 2L)
+  expect_true(length(result$coverage_diagnostics[[1]]$details) >= 1L)
+  expect_match(result$processing_failures[[1]]$condition_message, "coverage_repair_incomplete")
+  expect_false(grepl("object 'coverage_records' not found", result$processing_failures[[1]]$condition_message, fixed = TRUE))
 })
 
 test_that("source footprint fallback uses fine source pixels and records support", {
@@ -146,6 +195,8 @@ test_that("source footprint fallback uses fine source pixels and records support
   source <- terra::rast(nrows = 10, ncols = 10, xmin = 0, xmax = 1, ymin = 0, ymax = 1, crs = "EPSG:4326"); terra::values(source) <- NA_real_; terra::values(source)[c(45, 46)] <- c(10, 20)
   result <- analyze_template_coverage(bilinear, nearest, source, template, maximum_repair_count = 4L, maximum_repair_fraction = 1, maximum_donor_radius_cells = 1L, maximum_source_buffer_km = 35)
   expect_true(result$repaired); expect_match(result$details[[1]]$donor_method, "source_footprint"); expect_equal(result$details[[1]]$source_footprint_donor_count, 2L); expect_equal(result$details[[1]]$source_cell_count, 2L); expect_equal(result$details[[1]]$selected_value, 15)
+  source_diagnostics <- result$details[[1]]$source_diagnostics
+  expect_true(nzchar(source_diagnostics$source_crs)); expect_true(source_diagnostics$intersects_source_extent); expect_gt(source_diagnostics$extracted_rows, 0); expect_equal(source_diagnostics$finite_extracted_rows, 2L)
 })
 
 test_that("source fallback fails explicitly without support", {
