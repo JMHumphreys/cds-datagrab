@@ -58,6 +58,8 @@ cat(sprintf("cached extraction: %s\n", extracted_dir))
 cat(sprintf("selected product: %s\n", product_id))
 cat(sprintf("selected processing date: %s\n", format(date, "%Y-%m-%d")))
 cat("CDS contacted: false\n")
+support_info <- era5land_support_mask_info(cfg, terra::rast(cfg$spatial$template_path), required = TRUE)
+cat(sprintf("master-template cells: %s\nERA5-Land-supported cells: %s\nstructurally unsupported cells: %s\nstructural support mask: %s\nunsupported-cell audit: %s\n", support_info$master_template_cells, support_info$era5land_supported_cells, support_info$unsupported_count, support_info$paths$support_mask, support_info$paths$unsupported_cells_audit))
 result <- process_downloaded_variable(member$extracted_path, p$daily_dir, cfg$spatial$template_path, cfg$spatial$bbox_path, pcfg, spec,
   overwrite_dates = date, expected_dates = date, run_expected_dates = date, request_manifest = list(member_request), date_source_map = member_map, run_dir = run_dir)
 if (length(result$coverage_diagnostics)) {
@@ -81,7 +83,7 @@ if (length(result$coverage_diagnostics)) {
         if (identical(as.integer(candidate$target_cell), 6159L) || identical(as.integer(candidate$candidate_cell), 5866L)) cat(sprintf("known-donor-candidate: target=%s candidate=%s row=%s col=%s inside=%s bilinear=%s nearest=%s in_bilinear_pool=%s in_nearest_pool=%s\n", candidate$target_cell, candidate$candidate_cell, candidate$candidate_row, candidate$candidate_column, candidate$template_inside, candidate$bilinear_value, candidate$nearest_value, candidate$candidate_in_bilinear_donor_pool, candidate$candidate_in_nearest_donor_pool))
       }
     }
-    cat(sprintf("coverage: date=%s pre=%s components=%s repaired=%s post=%s outside=%s\n", record$date %||% date, record$missing_inside_pre_repair_count %||% NA, length(record$component_records %||% list()), record$repair_count %||% NA, record$missing_inside_post_repair_count %||% NA, record$outside_mask_count %||% NA))
+    cat(sprintf("coverage: date=%s master=%s supported=%s structural=%s pre-repair-missing=%s pre-repair-missing-supported=%s components=%s repaired-supported=%s post-repair-unexpected-missing=%s outside-support-finite=%s outside-mask=%s\n", record$date %||% date, record$master_template_cells %||% NA, record$era5land_supported_cells %||% NA, record$structurally_unsupported_cells %||% NA, record$pre_repair_missing_cells %||% record$missing_inside_pre_repair_count %||% NA, record$pre_repair_missing_supported_cells %||% NA, length(record$component_records %||% list()), record$repair_count %||% NA, record$post_repair_unexpected_missing_cells %||% record$missing_inside_post_repair_count %||% NA, record$outside_support_finite_cells %||% NA, record$outside_mask_finite_cells %||% record$outside_mask_count %||% NA))
     if (length(record$component_records)) print(utils::head(utils::read.csv(record$coverage_diagnostic_paths[["component_csv"]]), 20L))
   }
 }

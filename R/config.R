@@ -102,6 +102,10 @@ resolve_config_paths <- function(config, project_root, output_root = NULL, creat
   for (n in names(p)) config$paths[[n]] <- p[[n]]
   config$spatial$template_path <- .normal_path(config$spatial$template_path, project_root)
   config$spatial$bbox_path <- .normal_path(config$spatial$bbox_path, project_root)
+  if (!is.null(config$coverage)) {
+    if (!is.null(config$coverage$support_mask)) config$coverage$support_mask <- .normal_path(config$coverage$support_mask, project_root)
+    if (!is.null(config$coverage$unsupported_cells_audit)) config$coverage$unsupported_cells_audit <- .normal_path(config$coverage$unsupported_cells_audit, project_root)
+  }
   config
 }
 
@@ -133,6 +137,13 @@ validate_pipeline_config <- function(config) {
   if (anyNA(c(config$temporal$initial_start_date, config$temporal$observed_end, config$temporal$future_end_date))) stop("Invalid configured date")
   spec <- get_variable_spec(config$project$dataset_id, config)
   if (config$cds$variable != spec$cds_variable || config$cds$daily_statistic != spec$daily_statistic) stop("Configuration does not match variable specification")
+  if (identical(as.character(spec$source_family_id %||% ""), "era5land_daily_mean_utc06")) {
+    if (is.null(config$coverage)) stop("ERA5-Land coverage.support_mask and coverage.unsupported_cells_audit are required")
+    if (is.null(config$coverage$support_mask) || is.null(config$coverage$unsupported_cells_audit)) stop("ERA5-Land coverage.support_mask and coverage.unsupported_cells_audit are required")
+    if (!file.exists(config$coverage$support_mask) || !file.exists(config$coverage$unsupported_cells_audit)) stop("Configured ERA5-Land support-mask files are missing")
+    if (!is.null(config$coverage$local_target_radius_cells) && as.integer(config$coverage$local_target_radius_cells) != 2L) stop("ERA5-Land local_target_radius_cells must remain 2")
+    if (!is.null(config$coverage$source_buffer_max_km) && as.numeric(config$coverage$source_buffer_max_km) > 35) stop("ERA5-Land source_buffer_max_km must not exceed 35 km")
+  }
   if (!is.null(config$spatial$expected_crs) && requireNamespace("terra", quietly = TRUE)) { validate_template_crs(terra::rast(config$spatial$template_path), config$spatial$expected_crs, config$spatial$geometry_tolerance %||% 0.001); validate_template_geometry(terra::rast(config$spatial$template_path), list(rows=config$spatial$expected_dimensions$rows, columns=config$spatial$expected_dimensions$columns, layers=config$spatial$expected_dimensions$layers, resolution=config$spatial$expected_resolution, extent=config$spatial$expected_extent), config$spatial$geometry_tolerance %||% 0.001) }
   config
 }

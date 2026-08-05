@@ -36,6 +36,7 @@ era5land_family_manifest <- function(run_dir, root, source_paths, request, cfg, 
     daily_outputs_written = 0L, daily_outputs_reused = 0L, pre_repair_missing_cells = 0L,
     repaired_cells = 0L, post_repair_missing_cells = 0L, outside_mask_cells = 0L,
     failure_stage = NULL, failure_message = NULL)
+  if (exists("era5land_support_provenance", mode = "function")) m <- modifyList(m, era5land_support_provenance(cfg))
   jsonlite::write_json(m, file.path(run_dir, "run_manifest.json"), pretty = TRUE, auto_unbox = TRUE, null = "null")
   m
 }
@@ -67,6 +68,12 @@ era5land_sum_available <- function(x) {
   sum(x, na.rm = TRUE)
 }
 
+era5land_first_available <- function(x) {
+  x <- as.numeric(x)
+  x <- x[is.finite(x)]
+  if (!length(x)) NA_real_ else x[[1L]]
+}
+
 era5land_condition_record <- function(e, stage = "process") {
   call <- tryCatch(conditionCall(e), error = function(err) NULL)
   list(failure_stage = stage, failure_message = conditionMessage(e), condition_class = class(e), condition_call = if (is.null(call)) NULL else paste(deparse(call), collapse = " "),
@@ -76,7 +83,7 @@ era5land_condition_record <- function(e, stage = "process") {
 era5land_product_result <- function(product_id, expected_dates, process = NULL, status = "failed", failure = NULL, source_member = NULL, source_alias = NULL) {
   dates <- if (!is.null(process)) process$date_results %||% list() else list()
   if (!length(dates)) dates <- lapply(as.character(expected_dates), function(d) list(date = d, status = if (status == "success") "success" else "failed", output_path = NULL,
-    pre_repair_missing_cells = NA_integer_, component_count = NA_integer_, repaired_cells = NA_integer_, post_repair_missing_cells = NA_integer_, outside_mask_cells = NA_integer_,
+    pre_repair_missing_cells = NA_integer_, pre_repair_missing_supported_cells = NA_integer_, structurally_unsupported_cells = NA_integer_, component_count = NA_integer_, repaired_cells = NA_integer_, post_repair_missing_cells = NA_integer_, post_repair_unexpected_missing_cells = NA_integer_, outside_mask_cells = NA_integer_, outside_support_finite_cells = NA_integer_,
     failure_stage = if (status == "success") NULL else failure$failure_stage %||% "process", failure_message = if (status == "success") NULL else failure$failure_message %||% "not_available"))
   dates <- unname(dates)
   successful <- vapply(dates, function(x) identical(x$status, "success") || identical(x$status, "reused"), logical(1))
@@ -89,6 +96,13 @@ era5land_product_result <- function(product_id, expected_dates, process = NULL, 
     repaired_cells = if (is.null(process)) NA_real_ else era5land_sum_available(vapply(dates, function(x) x$repaired_cells %||% NA_real_, numeric(1))),
     post_repair_missing_cells = if (is.null(process)) NA_real_ else era5land_sum_available(vapply(dates, function(x) x$post_repair_missing_cells %||% NA_real_, numeric(1))),
     outside_mask_cells = if (is.null(process)) NA_real_ else era5land_sum_available(vapply(dates, function(x) x$outside_mask_cells %||% NA_real_, numeric(1))),
+    master_template_cells = if (is.null(process)) NA_real_ else process$coverage_summary$master_template_cells %||% NA_real_,
+    era5land_supported_cells = if (is.null(process)) NA_real_ else process$coverage_summary$era5land_supported_cells %||% NA_real_,
+    structurally_unsupported_cells = if (is.null(process)) NA_real_ else process$coverage_summary$structurally_unsupported_cells %||% NA_real_,
+    pre_repair_missing_supported_cells = if (is.null(process)) NA_real_ else process$coverage_summary$pre_repair_missing_supported_cells %||% NA_real_,
+    repaired_supported_cells = if (is.null(process)) NA_real_ else process$coverage_summary$repaired_supported_cells %||% NA_real_,
+    post_repair_unexpected_missing_cells = if (is.null(process)) NA_real_ else process$coverage_summary$post_repair_unexpected_missing_cells %||% NA_real_,
+    outside_support_finite_cells = if (is.null(process)) NA_real_ else process$coverage_summary$outside_support_finite_cells %||% NA_real_,
     failure_stage = if (status == "success") NULL else failure$failure_stage %||% "process", failure_message = if (status == "success") NULL else failure$failure_message %||% "not_available",
     condition_class = if (status == "success") NULL else failure$condition_class %||% NULL, condition_call = if (status == "success") NULL else failure$condition_call %||% NULL,
     traceback = if (status == "success") NULL else failure$traceback %||% NULL, date_results = dates)
@@ -156,6 +170,7 @@ run_era5land_daily_mean_family <- function(config_path = "config/era5land_daily_
       daily_outputs_written = 0L, daily_outputs_reused = 0L, daily_outputs_replaced = 0L, pre_repair_missing_cells = 0L,
       repaired_cells = 0L, post_repair_missing_cells = 0L, outside_mask_cells = 0L,
       failure_stage = NULL, failure_message = NULL)
+    if (exists("era5land_support_provenance", mode = "function")) lineage <- modifyList(lineage, era5land_support_provenance(cfg))
     jsonlite::write_json(lineage, file.path(product_run, "run_manifest.json"), pretty = TRUE, auto_unbox = TRUE, null = "null")
     finalize_product_manifest <- function(x) {
       x$completed_at <- format(Sys.time(), tz = "UTC", usetz = TRUE)
@@ -167,6 +182,13 @@ run_era5land_daily_mean_family <- function(config_path = "config/era5land_daily_
       pr <- process_downloaded_variable(member$extracted_path, p$daily_dir, cfg$spatial$template_path, cfg$spatial$bbox_path, pcfg, spec,
         overwrite_dates = if (overwrite) expected else NULL, expected_dates = expected, run_expected_dates = expected, request_manifest = list(member_request), date_source_map = member_map, run_dir = product_run)
       lineage$daily_outputs_written <- length(pr$written); lineage$daily_outputs_reused <- length(pr$reused); lineage$daily_outputs_replaced <- length(pr$replaced)
+      lineage$master_template_cells <- pr$coverage_summary$master_template_cells %||% 0L
+      lineage$era5land_supported_cells <- pr$coverage_summary$era5land_supported_cells %||% 0L
+      lineage$structurally_unsupported_cells <- pr$coverage_summary$structurally_unsupported_cells %||% 0L
+      lineage$pre_repair_missing_supported_cells <- pr$coverage_summary$pre_repair_missing_supported_cells %||% 0L
+      lineage$repaired_supported_cells <- pr$coverage_summary$repaired_supported_cells %||% 0L
+      lineage$post_repair_unexpected_missing_cells <- pr$coverage_summary$post_repair_unexpected_missing_cells %||% 0L
+      lineage$outside_support_finite_cells <- pr$coverage_summary$outside_support_finite_cells %||% 0L
       lineage$pre_repair_missing_cells <- pr$coverage_summary$pre_repair_missing_cells %||% 0L
       lineage$repaired_cells <- pr$coverage_summary$repaired_cells %||% 0L
       lineage$post_repair_missing_cells <- pr$coverage_summary$post_repair_missing_cells %||% 0L
@@ -201,6 +223,13 @@ run_era5land_daily_mean_family <- function(config_path = "config/era5land_daily_
   manifest$daily_outputs_written <- era5land_sum_available(vapply(results, function(x) x$daily_outputs_written %||% NA_real_, numeric(1)))
   manifest$daily_outputs_reused <- era5land_sum_available(vapply(results, function(x) x$daily_outputs_reused %||% NA_real_, numeric(1)))
   manifest$daily_outputs_replaced <- era5land_sum_available(vapply(results, function(x) if (!is.null(x$process)) length(x$process$replaced) else NA_real_, numeric(1)))
+  manifest$master_template_cells <- era5land_first_available(vapply(results, function(x) x$master_template_cells %||% NA_real_, numeric(1)))
+  manifest$era5land_supported_cells <- era5land_first_available(vapply(results, function(x) x$era5land_supported_cells %||% NA_real_, numeric(1)))
+  manifest$structurally_unsupported_cells <- era5land_first_available(vapply(results, function(x) x$structurally_unsupported_cells %||% NA_real_, numeric(1)))
+  manifest$pre_repair_missing_supported_cells <- era5land_sum_available(vapply(results, function(x) x$pre_repair_missing_supported_cells %||% NA_real_, numeric(1)))
+  manifest$repaired_supported_cells <- era5land_sum_available(vapply(results, function(x) x$repaired_supported_cells %||% NA_real_, numeric(1)))
+  manifest$post_repair_unexpected_missing_cells <- era5land_sum_available(vapply(results, function(x) x$post_repair_unexpected_missing_cells %||% NA_real_, numeric(1)))
+  manifest$outside_support_finite_cells <- era5land_sum_available(vapply(results, function(x) x$outside_support_finite_cells %||% NA_real_, numeric(1)))
   manifest$pre_repair_missing_cells <- era5land_sum_available(vapply(results, function(x) x$pre_repair_missing_cells %||% NA_real_, numeric(1)))
   manifest$repaired_cells <- era5land_sum_available(vapply(results, function(x) x$repaired_cells %||% NA_real_, numeric(1)))
   manifest$post_repair_missing_cells <- era5land_sum_available(vapply(results, function(x) x$post_repair_missing_cells %||% NA_real_, numeric(1)))

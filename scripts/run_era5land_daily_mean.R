@@ -12,11 +12,11 @@ ans <- run_era5land_daily_mean_family(config_path=config, mode=mode, dry_run=tol
 field <- function(x, name, default = NULL) if(!is.null(x[[name]])) x[[name]] else default
 manifest <- field(ans, "manifest", list())
 source <- field(ans, "source_diagnostic", list())
-cat(sprintf("source family: era5land_daily_mean_utc06\nproducts: %s\nstatus: %s\nfamily status: %s\nrun directory: %s\nraw reused: %s\narchive members: %s\nsource map rows: %s\nrequested product-dates: %s\ndaily outputs written: %s\ndaily outputs reused: %s\npre-repair missing cells: %s\nrepaired cells: %s\npost-repair missing cells: %s\nfailed products: %s\nfailed dates: %s\n",
+cat(sprintf("source family: era5land_daily_mean_utc06\nproducts: %s\nstatus: %s\nfamily status: %s\nrun directory: %s\nraw reused: %s\narchive members: %s\nsource map rows: %s\nrequested product-dates: %s\ndaily outputs written: %s\ndaily outputs reused: %s\nmaster-template cells: %s\nERA5-Land-supported cells: %s\nstructurally unsupported cells: %s\npre-repair missing cells: %s\npre-repair missing supported cells: %s\nrepaired supported cells: %s\npost-repair unexpected missing cells: %s\noutside-support finite cells: %s\nfailed products: %s\nfailed dates: %s\n",
   paste(ids,collapse=", "),ans$status,field(ans,"family_status",ans$status),if(is.null(ans$run_dir)) "" else ans$run_dir,
   field(source,"raw_reused",field(manifest,"raw_reused",NA)),field(source,"archive_member_count",NA),field(source,"source_map_rows",NA),
   length(field(manifest,"requested_product_dates",character())),field(manifest,"daily_outputs_written",0),field(manifest,"daily_outputs_reused",0),
-  field(manifest,"pre_repair_missing_cells",0),field(manifest,"repaired_cells",0),field(manifest,"post_repair_missing_cells",0),
+  field(manifest,"master_template_cells",0),field(manifest,"era5land_supported_cells",0),field(manifest,"structurally_unsupported_cells",0),field(manifest,"pre_repair_missing_cells",0),field(manifest,"pre_repair_missing_supported_cells",0),field(manifest,"repaired_supported_cells",0),field(manifest,"post_repair_unexpected_missing_cells",0),field(manifest,"outside_support_finite_cells",0),
   paste(field(manifest,"failed_products",character()),collapse=","),paste(field(manifest,"failed_product_dates",character()),collapse=",")))
 ok <- if(mode %in% c("plan","download") || tolower(dry_run) %in% c("true","1","yes")) ans$status %in% c("planned","downloaded") else identical(ans$status,"success")
 if(!ok) {

@@ -185,6 +185,8 @@ test_that("coverage failure returns diagnostics without masking the original err
   expect_length(result$coverage_diagnostics, 2L)
   expect_true(length(result$coverage_diagnostics[[1]]$details) >= 1L)
   expect_match(result$processing_failures[[1]]$condition_message, "coverage_repair_incomplete")
+  expect_match(result$processing_failures[[1]]$condition_message, "1 pre-repair missing")
+  expect_false(grepl("repair_failure_reasons=NA", result$processing_failures[[1]]$condition_message, fixed = TRUE))
   expect_false(grepl("object 'coverage_records' not found", result$processing_failures[[1]]$condition_message, fixed = TRUE))
 })
 
