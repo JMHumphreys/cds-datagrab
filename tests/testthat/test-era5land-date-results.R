@@ -114,7 +114,9 @@ test_that("installed debug runner completes one cached ERA5-Land date", {
   expect_null(probe_launch_error, info = probe_context)
   expect_equal(probe_status, 0L, info = probe_context)
   lib_path_line <- probe_stdout[startsWith(probe_stdout, "LIBPATHS=")]
-  expect_length(lib_path_line, 1L, info = probe_context)
+  if (length(lib_path_line) != 1L) {
+    testthat::fail(paste("Expected exactly one LIBPATHS probe line.", probe_context, sep = "\n"))
+  }
   if (length(lib_path_line)) {
     observed_child_libs <- strsplit(sub("^LIBPATHS=", "", lib_path_line[[1L]]), .Platform$path.sep, fixed = TRUE)[[1L]]
     expect_identical(normalizePath(observed_child_libs[[1L]], winslash = "/", mustWork = TRUE), normalizePath(installed_roots[[1L]], winslash = "/", mustWork = TRUE), info = probe_context)
