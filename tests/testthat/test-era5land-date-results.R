@@ -1,3 +1,18 @@
+era5land_rscript_name <- function(os_type = .Platform$OS.type) {
+  if (identical(os_type, "windows")) "Rscript.exe" else "Rscript"
+}
+
+era5land_rscript_path <- function(r_home = R.home("bin"), os_type = .Platform$OS.type) {
+  file.path(r_home, era5land_rscript_name(os_type))
+}
+
+test_that("Rscript launcher resolves the platform executable", {
+  expect_identical(era5land_rscript_name("unix"), "Rscript")
+  expect_identical(era5land_rscript_name("windows"), "Rscript.exe")
+  rscript <- era5land_rscript_path()
+  expect_true(file.exists(rscript), info = paste("Rscript executable not found:", rscript))
+})
+
 test_that("installed debug runner completes one cached ERA5-Land date", {
   skip_if_not_installed("terra")
   skip_if_not_installed("ncdf4")
@@ -57,10 +72,93 @@ test_that("installed debug runner completes one cached ERA5-Land date", {
   era5land_extract_archive(archive, source_paths$extracted_dir, request$request_hash, as.Date(request$raw_request_dates))
 
   script <- package_file("scripts", "debug_era5land_slice.R")
-  rscript <- file.path(R.home("bin"), "Rscript.exe")
-  output <- system2(rscript, c(script, "--config", config_path, "--product", "era5land_tmean", "--date", "2026-02-01", "--output-root", output_root), env = c(paste0("R_LIBS=", installed_roots[[1L]]), paste0("R_LIBS_USER=", installed_roots[[1L]])), stdout = TRUE, stderr = TRUE)
-  expect_null(attr(output, "status"), info = paste(output, collapse = "\n"))
-  expect_true(any(grepl("slice status=success", output, fixed = TRUE)), paste(output, collapse = "\n"))
-  expect_false(any(grepl("date_results.*not found|object 'date_results'", output)), paste(output, collapse = "\n"))
+  rscript <- era5land_rscript_path()
+  expect_true(file.exists(rscript), info = paste("Rscript executable not found:", rscript))
+  child_libs <- unique(c(installed_roots[[1L]], .libPaths()))
+  child_libs <- child_libs[nzchar(child_libs) & dir.exists(child_libs)]
+  child_lib_path <- paste(child_libs, collapse = .Platform$path.sep)
+  child_env <- c(paste0("R_LIBS_USER=", child_lib_path))
+  if (nzchar(Sys.getenv("R_LIBS", ""))) child_env <- c(child_env, paste0("R_LIBS=", child_lib_path))
+
+  probe <- tempfile("era5land-child-library-", fileext = ".R")
+  probe_stdout_file <- tempfile("era5land-child-library-", fileext = ".out")
+  probe_stderr_file <- tempfile("era5land-child-library-", fileext = ".err")
+  stdout_file <- tempfile("era5land-debug-runner-", fileext = ".out")
+  stderr_file <- tempfile("era5land-debug-runner-", fileext = ".err")
+  on.exit(unlink(c(probe, probe_stdout_file, probe_stderr_file, stdout_file, stderr_file), force = TRUE), add = TRUE)
+  writeLines(c(
+    "paths <- .libPaths()",
+    "cat(paste0('LIBPATHS=', paste(paths, collapse = .Platform$path.sep), '\\n'))",
+    "for (package in c('cdsdatagrab', 'terra', 'sf', 'yaml', 'ncdf4')) cat(sprintf('PACKAGE[%s]=%s\\n', package, find.package(package, quiet = TRUE)))"
+  ), probe)
+  probe_launch_error <- NULL
+  probe_status <- tryCatch(
+    system2(rscript, probe, env = child_env, stdout = probe_stdout_file, stderr = probe_stderr_file),
+    error = function(e) {
+      probe_launch_error <<- conditionMessage(e)
+      NA_integer_
+    }
+  )
+  probe_stdout <- readLines(probe_stdout_file, warn = FALSE)
+  probe_stderr <- readLines(probe_stderr_file, warn = FALSE)
+  probe_context <- paste(
+    "Rscript path:", rscript,
+    "command arguments:", probe,
+    "exit status:", probe_status,
+    "child R_LIBS_USER:", child_lib_path,
+    "child library paths:", paste(probe_stdout, collapse = " | "),
+    "stdout:", paste(probe_stdout, collapse = "\n"),
+    "stderr:", paste(probe_stderr, collapse = "\n"),
+    sep = "\n"
+  )
+  expect_null(probe_launch_error, info = probe_context)
+  expect_equal(probe_status, 0L, info = probe_context)
+  lib_path_line <- probe_stdout[startsWith(probe_stdout, "LIBPATHS=")]
+  expect_length(lib_path_line, 1L, info = probe_context)
+  if (length(lib_path_line)) {
+    observed_child_libs <- strsplit(sub("^LIBPATHS=", "", lib_path_line[[1L]]), .Platform$path.sep, fixed = TRUE)[[1L]]
+    expect_identical(normalizePath(observed_child_libs[[1L]], winslash = "/", mustWork = TRUE), normalizePath(installed_roots[[1L]], winslash = "/", mustWork = TRUE), info = probe_context)
+  }
+  package_paths <- setNames(
+    vapply(c("cdsdatagrab", "terra", "sf", "yaml", "ncdf4"), function(package) {
+      line <- probe_stdout[startsWith(probe_stdout, paste0("PACKAGE[", package, "]="))]
+      if (length(line)) sub(paste0("^PACKAGE\\[", package, "\\]="), "", line[[1L]]) else ""
+    }, character(1)),
+    c("cdsdatagrab", "terra", "sf", "yaml", "ncdf4")
+  )
+  expect_true(nzchar(package_paths[["cdsdatagrab"]]), info = probe_context)
+  if (nzchar(package_paths[["cdsdatagrab"]])) expect_identical(normalizePath(package_paths[["cdsdatagrab"]], winslash = "/", mustWork = TRUE), normalizePath(file.path(installed_roots[[1L]], "cdsdatagrab"), winslash = "/", mustWork = TRUE), info = probe_context)
+  expect_true(all(nzchar(package_paths[c("terra", "sf", "yaml", "ncdf4")])), info = probe_context)
+
+  stdout_file_created <- file.create(stdout_file)
+  stderr_file_created <- file.create(stderr_file)
+  expect_true(stdout_file_created && stderr_file_created, info = paste("Could not create subprocess capture files", stdout_file, stderr_file))
+  child_args <- c(script, "--config", config_path, "--product", "era5land_tmean", "--date", "2026-02-01", "--output-root", output_root)
+  launch_error <- NULL
+  status <- tryCatch(
+    system2(rscript, child_args, env = child_env, stdout = stdout_file, stderr = stderr_file),
+    error = function(e) {
+      launch_error <<- conditionMessage(e)
+      NA_integer_
+    }
+  )
+  stdout <- readLines(stdout_file, warn = FALSE)
+  stderr <- readLines(stderr_file, warn = FALSE)
+  context <- paste(
+    "Rscript path:", rscript,
+    "command arguments:", paste(child_args, collapse = " "),
+    "exit status:", status,
+    "child R_LIBS_USER:", child_lib_path,
+    "child library paths:", paste(probe_stdout, collapse = " | "),
+    "stdout:", paste(stdout, collapse = "\n"),
+    "stderr:", paste(stderr, collapse = "\n"),
+    "output root:", output_root,
+    "launch error:", launch_error %||% "<none>",
+    sep = "\n"
+  )
+  expect_null(launch_error, info = context)
+  expect_equal(status, 0L, info = context)
+  expect_true(any(grepl("slice status=success", stdout, fixed = TRUE)), info = context)
+  expect_false(any(grepl("date_results.*not found|object 'date_results'", c(stdout, stderr))), info = context)
   expect_true(file.exists(file.path(output_root, "data", "smoke", "era5land_tmean", "daily", "era5land_tmean_2026-02-01.tif")))
 })
