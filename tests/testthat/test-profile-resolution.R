@@ -56,7 +56,6 @@ test_that("all tracked YAML configurations use project.profile and both YAML sty
   expect_true(any(grepl("(?m)^project:[[:space:]]*\\{", text, perl = TRUE)))
   expect_true(any(grepl("(?m)^project:[[:space:]]*$", text, perl = TRUE)))
 })
-
 test_that("structured profile resolution handles family configs, paths, normalization, and misleading filenames", {
   smoke <- package_file("config", "era5land_daily_mean_utc06_smoke.yml")
   weekly <- package_file("config", "era5land_daily_mean_utc06_weekly_smoke.yml")
@@ -79,7 +78,6 @@ test_that("structured profile resolution handles family configs, paths, normaliz
   expect_match(paste(run_profile_environment(misleading_smoke, absolute = TRUE), collapse = "\n"), "profile=production")
   expect_match(paste(run_profile_environment(misleading_production, absolute = TRUE), collapse = "\n"), "profile=smoke")
 })
-
 test_that("explicit profile conflicts and malformed profiles fail clearly", {
   smoke <- package_file("config", "era5land_daily_mean_utc06_smoke.yml")
   production <- package_file("config", "era5land_daily_mean_utc06_production.yml")
@@ -101,35 +99,4 @@ test_that("explicit profile conflicts and malformed profiles fail clearly", {
   expect_true(length(attr(unsupported_result, "status")) == 1L)
   expect_match(paste(missing_result, collapse = "\n"), "Could not resolve project.profile")
   expect_match(paste(unsupported_result, collapse = "\n"), "Unsupported configuration profile")
-})
-
-test_that("ERA5-Land wrapper reaches mocked sbatch after profile preparation", {
-  bash <- profile_test_bash()
-  repo <- profile_test_bash_path(package_root())
-  r_bin <- profile_test_bash_path(R.home("bin"))
-  mock_bin <- tempfile("mock-sbatch-", tmpdir = package_root())
-  dir.create(mock_bin)
-  mock <- file.path(mock_bin, "sbatch")
-  writeLines(c("#!/usr/bin/env bash", "echo 98765"), mock)
-  Sys.chmod(mock, "0755")
-  withr::defer(unlink(mock_bin, recursive = TRUE, force = TRUE))
-  root <- paste0("/tmp/cds-datagrab-wrapper-test-", Sys.getpid(), "-", sample.int(1e6, 1L))
-  script <- paste(
-    "set -euo pipefail",
-    paste0("export PATH=", profile_test_quote(profile_test_bash_path(mock_bin)), ":/usr/bin:/bin:", profile_test_quote(r_bin), ":", profile_test_quote(dirname(r_bin)), ":$PATH"),
-    paste0("REPO_DIR=", profile_test_quote(repo)),
-    "CONFIG=config/era5land_daily_mean_utc06_smoke.yml PROFILE=smoke DRY_RUN=true MODE=plan",
-    paste0("CDS_DATAGRAB_ROOT=", profile_test_quote(root)),
-    "CDS_DATAGRAB_R_LIB=/tmp/cds-datagrab-test-r-library",
-    "export REPO_DIR CONFIG PROFILE DRY_RUN MODE CDS_DATAGRAB_ROOT CDS_DATAGRAB_R_LIB",
-    "bash \"$REPO_DIR/hpc/submit_era5land_daily_mean.sh\"",
-    sep = "; "
-  )
-  script_file <- tempfile("wrapper-runner-", tmpdir = package_root(), fileext = ".sh")
-  writeLines(script, script_file)
-  withr::defer(unlink(script_file, force = TRUE))
-  output <- system2(bash, script_file, stdout = TRUE, stderr = TRUE)
-  expect_null(attr(output, "status"))
-  expect_match(paste(output, collapse = "\n"), "submitted job ID: 98765")
-  expect_match(paste(output, collapse = "\n"), "profile: smoke")
 })

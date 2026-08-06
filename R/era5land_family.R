@@ -21,13 +21,13 @@ era5land_validate_debug_date <- function(date, family_dates) {
   invisible(date)
 }
 
-era5land_family_manifest <- function(run_dir, root, source_paths, request, cfg, products, status = "running") {
+era5land_family_manifest <- function(run_dir, root, source_paths, request, cfg, products, status = "running", execution_mode = NULL, workflow_mode = NULL, overwrite = FALSE, rebuild_all_weeks = FALSE) {
   m <- list(run_id = basename(run_dir), run_dir = run_dir, source_family_id = "era5land_daily_mean_utc06", profile = cfg$project$profile,
     resolved_output_root = root, output_root_source = source_paths$root_source, source_directory = source_paths$source_root,
     raw_directory = source_paths$raw_dir, requested_variables = request$requested_variables, product_ids = products,
     request_hash = request$request_hash, request_start = request$request_start, request_end = request$request_end,
     daily_statistic = request$daily_statistic, daily_time_zone = request$time_zone, daily_sampling_frequency = request$frequency,
-    request_area = request$area, status = status, family_status = status,
+    request_area = request$area, execution_mode = execution_mode %||% "execute", workflow_mode = workflow_mode %||% "full", overwrite = isTRUE(overwrite), rebuild_all_weeks = isTRUE(rebuild_all_weeks), status = status, family_status = status,
     started_at = format(Sys.time(), tz = "UTC", usetz = TRUE), completed_at = NULL,
     product_count = length(products), successful_products = character(), failed_products = character(),
     requested_product_dates = as.vector(outer(products, as.character(request$raw_request_dates), paste, sep = "__")),
@@ -109,7 +109,7 @@ era5land_product_result <- function(product_id, expected_dates, process = NULL, 
 }
 
 run_era5land_daily_mean_family <- function(config_path = "config/era5land_daily_mean_utc06_smoke.yml", mode = c("plan", "download", "process", "aggregate", "full"), dry_run = TRUE,
-                                           start_date = NULL, end_date = NULL, output_root = NULL, product_ids = .era5land_product_ids(), overwrite = FALSE, transfer_fun = NULL) {
+                                           start_date = NULL, end_date = NULL, output_root = NULL, product_ids = .era5land_product_ids(), overwrite = FALSE, rebuild_all_weeks = FALSE, transfer_fun = NULL) {
   mode <- match.arg(mode); cfg <- read_pipeline_config(config_path); root <- resolve_project_root(dirname(config_path)); cfg <- resolve_config_paths(cfg, root, output_root, FALSE); cfg <- validate_pipeline_config(cfg)
   if (!identical(unname(as.character(cfg$project$source_family_id)), "era5land_daily_mean_utc06")) stop("Configuration is not an ERA5-Land daily-mean source-family configuration", call. = FALSE)
   if (!all(product_ids %in% .era5land_product_ids())) stop("Unknown ERA5-Land product selector", call. = FALSE)
@@ -119,7 +119,7 @@ run_era5land_daily_mean_family <- function(config_path = "config/era5land_daily_
   run_dir <- file.path(source_paths$runs_root, run_id); fs::dir_create(run_dir, recurse = TRUE)
   diag <- diagnose_spatial_domain(cfg$spatial$template_path, cfg$spatial$bbox_path, cfg)
   requests <- build_era5land_daily_mean_requests(expected, diag$final_cds_area, cfg, .era5land_product_ids()); req <- if (length(requests)) requests[[1L]] else NULL
-  manifest <- if (!is.null(req)) era5land_family_manifest(run_dir, source_paths$root, source_paths, req, cfg, product_ids) else list(run_dir = run_dir)
+  manifest <- if (!is.null(req)) era5land_family_manifest(run_dir, source_paths$root, source_paths, req, cfg, product_ids, execution_mode = if (isTRUE(dry_run)) "dry-run" else "execute", workflow_mode = mode, overwrite = overwrite, rebuild_all_weeks = rebuild_all_weeks) else list(run_dir = run_dir)
   fail_family <- function(stage, message) {
     if (!is.null(req)) {
       manifest$status <- "failed"; manifest$family_status <- "failed"; manifest$failure_stage <- stage; manifest$failure_message <- message
@@ -201,7 +201,7 @@ run_era5land_daily_mean_family <- function(config_path = "config/era5land_daily_
         stop("Product/date processing incomplete for ", id, call. = FALSE)
       }
       era5land_annotate_product_metadata(p$daily_dir, spec, req, member); product_result <- era5land_product_result(id, expected, pr, "success", source_member = member$member_name, source_alias = member$environmental_variable_alias); wr <- c(product_result, list(request_hash = req$request_hash, process = pr))
-      if (mode %in% c("aggregate", "full")) { inv <- inventory_daily_products(p$daily_dir, spec$daily_filename_prefix, cfg$spatial$template_path, TRUE, pcfg); wr$weekly <- aggregate_daily_to_weekly(p$daily_dir, p$weekly_dir, spec$weekly_filename_prefix, template_path = cfg$spatial$template_path, inventory = inv, variable_spec = spec, config = pcfg); era5land_annotate_product_metadata(p$weekly_dir, spec, req, member) }
+      if (mode %in% c("aggregate", "full")) { inv <- inventory_daily_products(p$daily_dir, spec$daily_filename_prefix, cfg$spatial$template_path, TRUE, pcfg); wr$weekly <- aggregate_daily_to_weekly(p$daily_dir, p$weekly_dir, spec$weekly_filename_prefix, template_path = cfg$spatial$template_path, rebuild_all = rebuild_all_weeks, inventory = inv, variable_spec = spec, config = pcfg); era5land_annotate_product_metadata(p$weekly_dir, spec, req, member) }
       lineage <- modifyList(lineage, product_result); lineage$status <- "success"; lineage$process <- pr; results[[id]] <<- wr; finalize_product_manifest(lineage)
     }, error = function(e) {
       original <- if (!is.null(pr) && length(pr$processing_failures)) pr$processing_failures[[1L]] else era5land_condition_record(e, "process")

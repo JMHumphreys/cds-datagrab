@@ -119,9 +119,42 @@ cds_datagrab_prepare_environment() {
   repo_abs="$(cd "$REPO_DIR" && pwd -P)"; root_abs="$(mkdir -p "$CDS_DATAGRAB_ROOT" && cd "$CDS_DATAGRAB_ROOT" && pwd -P)"
   [[ "$root_abs" != "$repo_abs" && "$root_abs" != "$repo_abs"/* ]] || { echo "Output root must be outside the repository checkout" >&2; return 2; }
   CDS_DATAGRAB_R_LIB="${CDS_DATAGRAB_R_LIB:?CDS_DATAGRAB_R_LIB must point to the external installed cdsdatagrab library}"
+  R_LIBS_USER="${CDS_DATAGRAB_R_LIB}:${HOME_R_LIB}"
   export REPO_DIR CONFIG PROFILE CDS_DATAGRAB_ROOT CDS_DATAGRAB_R_LIB HOME_R_LIB R_LIBS_USER
   unset R_LIBS_SITE
   cds_datagrab_validate_root_marker
+}
+
+cds_datagrab_prepare_plan_environment() {
+  REPO_DIR="${REPO_DIR:-$(cds_datagrab_repo_dir)}"
+  REPO_DIR="$(cd -- "$REPO_DIR" && pwd -P)"
+  CONFIG="${CONFIG:?CONFIG must be set}"
+  local config_path config_profile explicit_profile repo_abs root_abs
+  config_path="$(cds_datagrab_resolve_config_path "$CONFIG")"
+  config_profile="$(cds_datagrab_config_profile "$config_path")"
+  CONFIG="$config_path"
+  if [[ -n "${PROFILE:-}" ]]; then
+    explicit_profile="$PROFILE"
+    PROFILE="$(cds_datagrab_normalize_profile "$PROFILE")"
+    [[ "$PROFILE" == smoke || "$PROFILE" == production ]] || { echo "Unsupported explicit PROFILE='$explicit_profile'; expected smoke or production" >&2; return 2; }
+    [[ "$PROFILE" == "$config_profile" ]] || {
+      echo "PROFILE='$explicit_profile' conflicts with configuration profile='$config_profile' from $config_path" >&2
+      return 2
+    }
+  else
+    PROFILE="$config_profile"
+  fi
+  cds_datagrab_resolve_root "$PROFILE"
+  repo_abs="$(cd "$REPO_DIR" && pwd -P)"
+  root_abs="$(realpath -m -- "$CDS_DATAGRAB_ROOT")"
+  [[ "$root_abs" != "$repo_abs" && "$root_abs" != "$repo_abs"/* ]] || { echo "Output root must be outside the repository checkout" >&2; return 2; }
+  CDS_DATAGRAB_R_LIB="${CDS_DATAGRAB_R_LIB:?CDS_DATAGRAB_R_LIB must point to the external installed cdsdatagrab library}"
+  R_LIBS_USER="${CDS_DATAGRAB_R_LIB}:${HOME_R_LIB}"
+  export REPO_DIR CONFIG PROFILE CDS_DATAGRAB_ROOT CDS_DATAGRAB_R_LIB HOME_R_LIB R_LIBS_USER
+  unset R_LIBS_SITE
+  if [[ -e "$CDS_DATAGRAB_ROOT/.cds-datagrab-root" ]]; then
+    cds_datagrab_validate_root_marker
+  fi
 }
 
 cds_datagrab_validate_window() {

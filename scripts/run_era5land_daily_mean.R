@@ -4,11 +4,13 @@ value <- function(flag, default=NULL) { i <- match(flag,args); if (is.na(i)) def
 config <- value("--config", "config/era5land_daily_mean_utc06_smoke.yml")
 mode <- value("--mode", "plan"); dry_run <- value("--dry-run", "true")
 start <- value("--start-date"); end <- value("--end-date"); root <- value("--output-root")
+overwrite <- "--overwrite" %in% args
+rebuild_all_weeks <- "--rebuild-all-weeks" %in% args
 if (!mode %in% c("plan","download","process","aggregate","full")) stop("--mode must be plan, download, process, aggregate, or full",call.=FALSE)
 library(cdsdatagrab)
 products <- value("--products", paste(era5land_family_product_ids(), collapse=","))
 ids <- strsplit(products,",",fixed=TRUE)[[1L]]
-ans <- run_era5land_daily_mean_family(config_path=config, mode=mode, dry_run=tolower(dry_run) %in% c("true","1","yes"), start_date=start, end_date=end, output_root=root, product_ids=ids)
+ans <- run_era5land_daily_mean_family(config_path=config, mode=mode, dry_run=tolower(dry_run) %in% c("true","1","yes"), start_date=start, end_date=end, output_root=root, product_ids=ids, overwrite=overwrite, rebuild_all_weeks=rebuild_all_weeks)
 field <- function(x, name, default = NULL) if(!is.null(x[[name]])) x[[name]] else default
 manifest <- field(ans, "manifest", list())
 source <- field(ans, "source_diagnostic", list())
