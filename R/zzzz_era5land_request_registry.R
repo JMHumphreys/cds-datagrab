@@ -137,7 +137,30 @@ era5land_local_archive <- function(request, paths) {
   if (length(valid)) normalizePath(valid[[1L]], winslash = "/", mustWork = TRUE) else NULL
 }
 
+era5land_migrate_legacy_unavailable_rows <- function(registry, requests, paths, persist = FALSE) {
+  if (!nrow(registry)) return(registry)
+  exact_message <- "Your requested file is unavailable - check url"
+  for (request in requests) {
+    idx <- era5land_registry_row_index(registry, request)
+    if (!length(idx)) next
+    row <- registry[idx[[1L]], , drop = FALSE]
+    eligible <- identical(as.character(row$request_status[[1L]]), "failed") &&
+      identical(as.character(row$error_message[[1L]]), exact_message) &&
+      era5land_has_value(row$cds_job_url[[1L]]) &&
+      is.null(era5land_local_archive(request, paths))
+    if (eligible) {
+      row$request_status <- "processing"
+      row$error_class <- "legacy_unavailable_reclassified"
+      row$error_message <- exact_message
+      registry <- era5land_registry_upsert(registry, row)
+    }
+  }
+  if (persist) era5land_write_request_registry(registry, paths)
+  registry
+}
+
 era5land_registry_reconcile <- function(requests, registry, paths, config, persist = FALSE) {
+  registry <- era5land_migrate_legacy_unavailable_rows(registry, requests, paths, persist = FALSE)
   for (request in requests) {
     row <- era5land_registry_row_for_request(request, config)
     idx <- era5land_registry_row_index(registry, request)
@@ -166,6 +189,10 @@ era5land_request_inventory <- function(requests, registry, paths) {
   x <- if (length(rows)) do.call(rbind, rows) else data.frame()
   list(rows = x, source_requests_planned = nrow(x), raw_archives_valid = sum(x$local_valid),
     registered_pending_cds_jobs = sum(!x$local_valid & x$has_job & x$registry_status %in% c("submitted", "processing", "ready")),
+    submitted_cds_jobs = sum(!x$local_valid & x$has_job & x$registry_status == "submitted"),
+    processing_cds_jobs = sum(!x$local_valid & x$has_job & x$registry_status == "processing"),
+    failed_cds_jobs = sum(!x$local_valid & x$registry_status == "failed"),
+    expired_cds_jobs = sum(!x$local_valid & x$registry_status == "expired"),
     new_cds_requests_required = sum(!x$local_valid & !x$has_job),
     retrievals_ready = sum(!x$local_valid & x$registry_status == "ready"))
 }
@@ -223,13 +250,43 @@ era5land_perform_cds_transfer <- function(url, target_path) {
   ecmwfr::wf_transfer(url, path = dirname(target_path), filename = basename(target_path), verbose = FALSE)
 }
 
-era5land_retrieval_class <- function(error_message = "") {
-  if (grepl("expired|expire|not found|404|gone", error_message, ignore.case = TRUE)) return("expired")
-  if (grepl("queued|processing|submitted|in progress|not ready|still running|pending|available later", error_message, ignore.case = TRUE)) return("processing")
-  "failed"
+era5land_normalize_remote_status <- function(status) {
+  value <- tolower(trimws(as.character(status %||% "")))
+  if (value %in% c("queued", "running", "submitted", "accepted", "processing", "pending", "in_progress")) return("processing")
+  if (value %in% c("successful", "success", "completed", "complete", "finished", "ready")) return("successful")
+  if (value %in% c("failed", "failure", "error", "rejected", "cancelled", "canceled")) return("failed")
+  if (value %in% c("expired", "deleted", "not_found", "gone")) return("expired")
+  "unknown"
 }
 
-era5land_retrieve_requests <- function(requests, registry, paths, config, transfer_fun = NULL) {
+era5land_query_cds_job_status <- function(url, status_fun = NULL) {
+  if (!is.null(status_fun)) {
+    answer <- if (length(formals(status_fun)) >= 1L) status_fun(url) else status_fun()
+    if (is.character(answer) && length(answer) == 1L) return(list(state = era5land_normalize_remote_status(answer), message = answer, raw = answer))
+    state <- answer$state %||% answer$status %||% answer$job_status
+    return(list(state = era5land_normalize_remote_status(state), message = as.character(answer$message %||% answer$error_message %||% state %||% ""), raw = answer))
+  }
+  if (!requireNamespace("ecmwfr", quietly = TRUE) || !requireNamespace("httr", quietly = TRUE)) stop("ecmwfr and httr are required for CDS job status inspection", call. = FALSE)
+  key <- ecmwfr::wf_get_key(user = "ecmwfr", service = "cds")
+  response <- httr::GET(url, httr::add_headers("PRIVATE-TOKEN" = key), encode = "json")
+  body <- tryCatch(httr::content(response), error = function(e) list())
+  if (httr::status_code(response) %in% c(404L, 410L)) return(list(state = "expired", message = paste0("CDS job endpoint returned HTTP ", httr::status_code(response)), raw = body))
+  if (httr::http_error(response)) stop("CDS job status query returned HTTP ", httr::status_code(response), call. = FALSE)
+  state <- body$status %||% body$state %||% body$job_status
+  list(state = era5land_normalize_remote_status(state), message = as.character(body$message %||% body$error_message %||% state %||% ""), raw = body)
+}
+
+era5land_retrieval_class <- function(error_message = "") {
+  message <- trimws(as.character(error_message %||% ""))
+  if (identical(message, "Your requested file is unavailable - check url") || grepl("Your requested file is unavailable[[:space:]]*-[[:space:]]*check url", message, ignore.case = TRUE)) return("processing")
+  if (grepl("expired|deleted from queue|previously deleted|job[^.]*not found|job[^.]*does not exist|request[^.]*gone", message, ignore.case = TRUE)) return("expired")
+  if (grepl("(job|request)[^.]*failed|(job|request)[^.]*rejected|permanent[^.]*error|terminal[^.]*fail|server[- ]side[^.]*fail", message, ignore.case = TRUE)) return("failed")
+  if (grepl("queued|processing|submitted|in progress|not ready|still running|pending|available later|timed out|timeout|connection reset|temporarily|temporary|unavailable", message, ignore.case = TRUE)) return("processing")
+  "processing"
+}
+
+era5land_retrieve_requests <- function(requests, registry, paths, config, transfer_fun = NULL, status_fun = NULL) {
+  registry <- era5land_migrate_legacy_unavailable_rows(registry, requests, paths, persist = FALSE)
   retrieved <- 0L; processing <- 0L; expired <- 0L; failed <- 0L
   for (request in requests) {
     idx <- era5land_registry_row_index(registry, request)
@@ -241,10 +298,25 @@ era5land_retrieve_requests <- function(requests, registry, paths, config, transf
       registry <- era5land_registry_upsert(registry, row); next
     }
     if (!era5land_has_value(row$cds_job_url) || identical(row$request_status, "expired")) next
+    status_probe <- tryCatch(era5land_query_cds_job_status(row$cds_job_url, status_fun = status_fun), error = function(e) structure(list(error = e), class = "cds_status_query_error"))
+    row$last_checked_at <- format(Sys.time(), tz = "UTC", usetz = TRUE)
+    if (!inherits(status_probe, "cds_status_query_error")) {
+      if (status_probe$state == "processing") {
+        row$request_status <- "processing"; row$error_class <- "remote_status_processing"; row$error_message <- status_probe$message %||% "CDS job is not ready"; processing <- processing + 1L
+        registry <- era5land_registry_upsert(registry, row); era5land_write_request_registry(registry, paths); next
+      }
+      if (status_probe$state == "failed") {
+        row$request_status <- "failed"; row$error_class <- "remote_status_failed"; row$error_message <- status_probe$message %||% "CDS job reported failed"; failed <- failed + 1L
+        registry <- era5land_registry_upsert(registry, row); era5land_write_request_registry(registry, paths); next
+      }
+      if (status_probe$state == "expired") {
+        row$request_status <- "expired"; row$error_class <- "remote_status_expired"; row$error_message <- status_probe$message %||% "CDS job expired"; expired <- expired + 1L
+        registry <- era5land_registry_upsert(registry, row); era5land_write_request_registry(registry, paths); next
+      }
+    }
     tmpdir <- file.path(paths$raw_dir, ".partial"); fs::dir_create(tmpdir, recurse = TRUE); tmp <- file.path(tmpdir, paste0(basename(request$target), ".part")); if (file.exists(tmp)) unlink(tmp)
     transfer <- transfer_fun %||% era5land_perform_cds_transfer
     answer <- tryCatch(if (length(formals(transfer)) >= 2L) transfer(row$cds_job_url, tmp) else transfer(row$cds_job_url), error = function(e) e)
-    row$last_checked_at <- format(Sys.time(), tz = "UTC", usetz = TRUE)
     if (inherits(answer, "error")) {
       classification <- era5land_retrieval_class(conditionMessage(answer)); row$error_class <- paste(class(answer), collapse = ";"); row$error_message <- conditionMessage(answer)
       row$request_status <- classification; if (classification == "processing") processing <- processing + 1L else if (classification == "expired") expired <- expired + 1L else failed <- failed + 1L

@@ -34,11 +34,15 @@ CDS job, and submits only requests with neither. It calls `wf_request(...,
 transfer = FALSE)` and persists the returned job URL immediately. It does not wait
 for CDS processing or process rasters.
 
-`--retrieve-requests` checks registered jobs with `wf_transfer()`. Available ZIPs
+`--retrieve-requests` first queries each persisted CDS job endpoint for structured
+remote state. Queued/running jobs remain `processing` and do not invoke
+`wf_transfer()`. Successful jobs are passed to `wf_transfer()`. Available ZIPs
 are validated for the expected eight NetCDF members, moved into the deterministic
-raw path atomically, and recorded with their checksum. Processing jobs remain in
-the registry as `processing`; expired jobs become `expired` with their original
-job ID retained. A retrieval pass with pending jobs exits successfully.
+raw path atomically, and recorded with their checksum. The known legacy
+`Your requested file is unavailable - check url` registry state is migrated to
+`processing` when its job URL is still present and no valid local archive exists.
+Explicitly failed jobs become `failed`; expired jobs become `expired` with their
+original job ID retained. A retrieval pass with pending jobs exits successfully.
 
 `--process` reads only locally retrieved, validated archives and performs extraction,
 daily raster processing, and weekly aggregation. It never contacts CDS. `--execute`
