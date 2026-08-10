@@ -139,3 +139,6 @@ Common causes and remedies:
 - Output-root safety error: use an external shared root, never the repository checkout.
 
 See [docs/output_schema.md](docs/output_schema.md), [docs/operator_runbook.md](docs/operator_runbook.md), and [docs/production_validation_summary.md](docs/production_validation_summary.md).
+
+For the ERA5-Land production request lifecycle, resumable CDS staging, retrieval,
+and Atlas commands, see [docs/era5land_request_lifecycle.md](docs/era5land_request_lifecycle.md).

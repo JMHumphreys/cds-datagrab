@@ -115,6 +115,14 @@ test_that("ERA5-Land submission CLI enforces the named interface and renders the
   expect_length(executed$sbatch_log, 1L)
   expect_match(paste(executed$sbatch_log, collapse = "\n"), "run_era5land_daily_mean[.]slurm")
 
+  for (mode in c("stage-requests", "retrieve-requests", "process")) {
+    routed <- era5land_submit_cli_run(c("--config", weekly, "--output-root", paste0("/tmp/cds datagrab ", mode), paste0("--", mode)), mock_sbatch = TRUE)
+    routed_text <- paste(routed$output, collapse = "\n")
+    expect_null(routed$status)
+    expect_match(routed_text, paste0("--mode ", mode))
+    expect_match(paste(routed$sbatch_log, collapse = "\n"), paste0("run_era5land_daily_mean_", sub("-requests", "", mode), "[.]slurm"))
+  }
+
   for (bad in list(
     c("--dry-run", "--execute"),
     c("--dry-run", "--unknown"),

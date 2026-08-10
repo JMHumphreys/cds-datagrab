@@ -11,6 +11,9 @@ Usage: bash hpc/submit_era5land_daily_mean.sh [options]
 
 Required execution option (exactly one):
   --dry-run                    Plan locally; do not submit a Slurm job.
+  --stage-requests             Submit missing CDS requests and exit after persistence.
+  --retrieve-requests          Retrieve available registered CDS results.
+  --process                    Process locally retrieved archives only.
   --execute                    Submit the rendered full workflow to Slurm.
 
 Other options:
@@ -52,12 +55,16 @@ while (( $# > 0 )); do
       require_value "$1" "${2:-}"
       [[ -z "${OUTPUT_ROOT_FROM_CLI:-}" ]] || die "--output-root was supplied more than once"
       OUTPUT_ROOT_FROM_CLI=true; OUTPUT_ROOT_ARG="$2"; shift 2 ;;
-    --dry-run)
-      [[ -z "$EXECUTION_MODE" ]] || die "--dry-run and --execute are mutually exclusive"
-      EXECUTION_MODE="dry-run"; shift ;;
-    --execute)
-      [[ -z "$EXECUTION_MODE" ]] || die "--dry-run and --execute are mutually exclusive"
-      EXECUTION_MODE="execute"; shift ;;
+    --dry-run|--stage-requests|--retrieve-requests|--process|--execute)
+      [[ -z "$EXECUTION_MODE" ]] || die "workflow execution options are mutually exclusive"
+      case "$1" in
+        --dry-run) EXECUTION_MODE="dry-run";;
+        --stage-requests) EXECUTION_MODE="stage";;
+        --retrieve-requests) EXECUTION_MODE="retrieve";;
+        --process) EXECUTION_MODE="process";;
+        --execute) EXECUTION_MODE="execute";;
+      esac
+      shift ;;
     --overwrite)
       [[ "$OVERWRITE" == false ]] || die "--overwrite was supplied more than once"
       OVERWRITE="true"; shift ;;
@@ -71,7 +78,7 @@ while (( $# > 0 )); do
   esac
 done
 
-[[ -n "$EXECUTION_MODE" ]] || die "exactly one of --dry-run or --execute is required"
+[[ -n "$EXECUTION_MODE" ]] || die "exactly one workflow execution option is required"
 if [[ -n "$OUTPUT_ROOT_ARG" ]]; then
   CDS_DATAGRAB_ROOT="$OUTPUT_ROOT_ARG"
   export CDS_DATAGRAB_ROOT
@@ -82,10 +89,22 @@ if [[ "$EXECUTION_MODE" == dry-run ]]; then
   DRY_RUN="true"
   cds_datagrab_prepare_plan_environment
 else
-  MODE="full"
+  case "$EXECUTION_MODE" in
+    stage) MODE="stage-requests";;
+    retrieve) MODE="retrieve-requests";;
+    process) MODE="process";;
+    execute) MODE="full";;
+  esac
   DRY_RUN="false"
   cds_datagrab_prepare_environment
 fi
+
+case "$MODE" in
+  stage-requests) SLURM_RUNNER="run_era5land_daily_mean_stage.slurm";;
+  retrieve-requests) SLURM_RUNNER="run_era5land_daily_mean_retrieve.slurm";;
+  process) SLURM_RUNNER="run_era5land_daily_mean_process.slurm";;
+  *) SLURM_RUNNER="run_era5land_daily_mean.slurm";;
+esac
 
 if [[ -n "$START_DATE" || -n "$END_DATE" ]]; then
   cds_datagrab_validate_window
@@ -148,8 +167,9 @@ SOURCE_COMMIT="$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || echo unavailab
 INSTALLED_COMMIT="$(cat "${CDS_DATAGRAB_R_LIB}/.cds-datagrab-installed-commit" 2>/dev/null || echo unavailable)"
 INNER_COMMAND="$(render_inner_command)"
 
-printf 'source family: era5land_daily_mean_utc06\nconfiguration: %s\nconfiguration checksum: %s\nprofile: %s\noutput root: %s (%s)\nexecution mode: %s\neffective dates: %s through %s\nproducts (%s): %s\ndaily outputs expected: %s\ndaily outputs currently indexed: %s\ncomplete ISO weeks: %s\nweekly outputs expected: %s\nweekly outputs currently indexed: %s\nsource request count: %s\nsource commit: %s\ninstalled commit: %s\nrendered inner command: %s\n' \
+  printf 'source family: era5land_daily_mean_utc06\nconfiguration: %s\nconfiguration checksum: %s\nprofile: %s\noutput root: %s (%s)\nexecution mode: %s\nworkflow mode: %s\neffective dates: %s through %s\nproducts (%s): %s\ndaily outputs expected: %s\ndaily outputs currently indexed: %s\ncomplete ISO weeks: %s\nweekly outputs expected: %s\nweekly outputs currently indexed: %s\nsource request count: %s\nsource commit: %s\ninstalled commit: %s\nrendered inner command: %s\n' \
   "$CONFIG" "$(sha256sum "$CONFIG" | awk '{print $1}')" "$PROFILE" "$CDS_DATAGRAB_ROOT" "$CDS_DATAGRAB_ROOT_SOURCE" "$EXECUTION_MODE" \
+  "$MODE" \
   "$PLAN_START_DATE" "$PLAN_END_DATE" "$PRODUCT_COUNT" "$PRODUCT_IDS" "$DAILY_EXPECTED" "$DAILY_INVENTORY" "$COMPLETE_WEEKS" "$WEEKLY_EXPECTED" "$WEEKLY_INVENTORY" "$SOURCE_REQUEST_COUNT" "$SOURCE_COMMIT" "$INSTALLED_COMMIT" "$INNER_COMMAND"
 printf 'request plan:\n%s\n' "$plan_output"
 
@@ -161,13 +181,13 @@ fi
 mkdir -p "$CDS_DATAGRAB_ROOT/logs/slurm/$PROFILE"
 export REPO_DIR CONFIG PROFILE MODE DRY_RUN START_DATE END_DATE CDS_DATAGRAB_ROOT CDS_DATAGRAB_R_LIB PRODUCT_IDS EXECUTION_MODE OVERWRITE REBUILD_ALL_WEEKS
 if [[ "${DIRECT_EXECUTION:-false}" == true ]]; then
-  exec bash "$REPO_DIR/hpc/run_era5land_daily_mean.slurm"
+  exec bash "$REPO_DIR/hpc/$SLURM_RUNNER"
 fi
 
 job_id="$(sbatch --parsable \
-  --job-name=cds_era5land_daily_mean \
+  --job-name="cds_era5land_daily_mean_${MODE}" \
   --output="$CDS_DATAGRAB_ROOT/logs/slurm/$PROFILE/cds_era5land_daily_mean_%j.out" \
   --error="$CDS_DATAGRAB_ROOT/logs/slurm/$PROFILE/cds_era5land_daily_mean_%j.err" \
   --export=ALL,REPO_DIR,CONFIG,PROFILE,MODE,DRY_RUN,START_DATE,END_DATE,CDS_DATAGRAB_ROOT,CDS_DATAGRAB_R_LIB,PRODUCT_IDS,EXECUTION_MODE,OVERWRITE,REBUILD_ALL_WEEKS \
-  "$REPO_DIR/hpc/run_era5land_daily_mean.slurm")"
+  "$REPO_DIR/hpc/$SLURM_RUNNER")"
 printf 'submitted job ID: %s\nSlurm log path: %s/logs/slurm/%s/cds_era5land_daily_mean_%%j.{out,err}\n' "$job_id" "$CDS_DATAGRAB_ROOT" "$PROFILE"

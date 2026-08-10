@@ -165,17 +165,17 @@ era5land_safe_failure_result <- function(product_id, expected_dates, process, or
   )
 }
 
-run_era5land_daily_mean_family <- function(config_path = "config/era5land_daily_mean_utc06_smoke.yml", mode = c("plan", "download", "process", "aggregate", "full"), dry_run = TRUE,
-                                           start_date = NULL, end_date = NULL, output_root = NULL, product_ids = .era5land_product_ids(), overwrite = FALSE, rebuild_all_weeks = FALSE, transfer_fun = NULL) {
-  mode <- match.arg(mode); cfg <- read_pipeline_config(config_path); root <- resolve_project_root(dirname(config_path)); cfg <- resolve_config_paths(cfg, root, output_root, FALSE); cfg <- validate_pipeline_config(cfg)
+run_era5land_daily_mean_family <- function(config_path = "config/era5land_daily_mean_utc06_smoke.yml", mode = c("plan", "download", "stage-requests", "retrieve-requests", "process", "aggregate", "execute", "full"), dry_run = TRUE,
+                                           start_date = NULL, end_date = NULL, output_root = NULL, product_ids = .era5land_product_ids(), overwrite = FALSE, rebuild_all_weeks = FALSE, transfer_fun = NULL, stage_fun = NULL, request_override = NULL, internal_call = FALSE) {
+  mode <- match.arg(mode); cfg <- read_pipeline_config(config_path); attr(cfg, "config_path") <- normalizePath(config_path, winslash = "/", mustWork = FALSE); root <- resolve_project_root(dirname(config_path)); attr(cfg, "project_root") <- root; cfg <- resolve_config_paths(cfg, root, output_root, FALSE); cfg <- validate_pipeline_config(cfg); attr(cfg, "config_path") <- normalizePath(config_path, winslash = "/", mustWork = FALSE); attr(cfg, "project_root") <- root
   if (!identical(unname(as.character(cfg$project$source_family_id)), "era5land_daily_mean_utc06")) stop("Configuration is not an ERA5-Land daily-mean source-family configuration", call. = FALSE)
   if (!all(product_ids %in% .era5land_product_ids())) stop("Unknown ERA5-Land product selector", call. = FALSE)
-  expected <- era5land_expected_dates(cfg, start_date, end_date, dry_run)
+  expected <- if (!is.null(request_override)) as.Date(request_override$raw_request_dates) else era5land_expected_dates(cfg, start_date, end_date, dry_run)
   source_paths <- resolve_source_storage_paths(cfg, root, output_root, create = TRUE)
   run_id <- paste0(format(Sys.time(), "%Y%m%dT%H%M%SZ", tz = "UTC"), "_", substr(digest::digest(list(cfg, mode, expected, product_ids), algo = "xxhash32"), 1, 8))
   run_dir <- file.path(source_paths$runs_root, run_id); fs::dir_create(run_dir, recurse = TRUE)
   diag <- diagnose_spatial_domain(cfg$spatial$template_path, cfg$spatial$bbox_path, cfg)
-  requests <- build_era5land_daily_mean_requests(expected, diag$final_cds_area, cfg, .era5land_product_ids()); req <- if (length(requests)) requests[[1L]] else NULL
+  requests <- if (!is.null(request_override)) list(request_override) else build_era5land_daily_mean_requests(expected, diag$final_cds_area, cfg, .era5land_product_ids()); req <- if (length(requests)) requests[[1L]] else NULL
   manifest <- if (!is.null(req)) era5land_family_manifest(run_dir, source_paths$root, source_paths, req, cfg, product_ids, execution_mode = if (isTRUE(dry_run)) "dry-run" else "execute", workflow_mode = mode, overwrite = overwrite, rebuild_all_weeks = rebuild_all_weeks) else list(run_dir = run_dir)
   fail_family <- function(stage, message) {
     if (!is.null(req)) {
@@ -187,16 +187,47 @@ run_era5land_daily_mean_family <- function(config_path = "config/era5land_daily_
   }
   jsonlite::write_json(diag, file.path(run_dir, "spatial_diagnostics.json"), pretty = TRUE, auto_unbox = TRUE)
   write_cds_request_manifests(requests, run_dir)
-  if (mode == "plan" || isTRUE(dry_run)) return(list(status = "planned", run_id = run_id, run_dir = run_dir, requests = requests, source_paths = source_paths, spatial_diagnostics = diag, products = product_ids))
+  registry <- era5land_registry_reconcile(requests, era5land_read_request_registry(source_paths), source_paths, cfg, persist = FALSE)
+  registry_inventory <- era5land_request_inventory(requests, registry, source_paths)
+  if (mode == "plan" || isTRUE(dry_run)) return(list(status = "planned", run_id = run_id, run_dir = run_dir, requests = requests, source_paths = source_paths, spatial_diagnostics = diag, products = product_ids, request_registry = registry, request_inventory = registry_inventory))
+
+  if (mode == "stage-requests") {
+    staged <- tryCatch(era5land_stage_requests(requests, registry, source_paths, cfg, stage_fun = stage_fun), error = function(e) fail_family("stage_requests", conditionMessage(e)))
+    inventory <- era5land_request_inventory(requests, staged$registry, source_paths)
+    status <- if (length(staged$failures)) "stage_failed" else "staged"
+    return(list(status = status, run_id = run_id, run_dir = run_dir, requests = requests, source_paths = source_paths, request_registry = staged$registry, request_inventory = inventory, staged = staged))
+  }
+
+  if (mode == "retrieve-requests") {
+    era5land_write_request_registry(registry, source_paths)
+    retrieved <- tryCatch(era5land_retrieve_requests(requests, registry, source_paths, cfg, transfer_fun = transfer_fun), error = function(e) fail_family("retrieve_requests", conditionMessage(e)))
+    inventory <- era5land_request_inventory(requests, retrieved$registry, source_paths)
+    status <- if (retrieved$failed > 0L) "retrieval_failed" else if (retrieved$processing > 0L || inventory$registered_pending_cds_jobs > 0L) "retrieval_pending" else "retrieved"
+    return(list(status = status, run_id = run_id, run_dir = run_dir, requests = requests, source_paths = source_paths, request_registry = retrieved$registry, request_inventory = inventory, retrieval = retrieved))
+  }
+
+  if (mode %in% c("execute", "full") && !internal_call) {
+    staged <- tryCatch(era5land_stage_requests(requests, registry, source_paths, cfg, stage_fun = stage_fun), error = function(e) fail_family("stage_requests", conditionMessage(e)))
+    retrieved <- tryCatch(era5land_retrieve_requests(requests, staged$registry, source_paths, cfg, transfer_fun = transfer_fun), error = function(e) fail_family("retrieve_requests", conditionMessage(e)))
+    inventory <- era5land_request_inventory(requests, retrieved$registry, source_paths)
+    if (length(staged$failures) || retrieved$failed > 0L) return(list(status = "execute_failed", run_id = run_id, run_dir = run_dir, requests = requests, source_paths = source_paths, request_registry = retrieved$registry, request_inventory = inventory, staged = staged, retrieval = retrieved))
+    if (inventory$new_cds_requests_required > 0L || inventory$registered_pending_cds_jobs > 0L) return(list(status = "execute_pending", run_id = run_id, run_dir = run_dir, requests = requests, source_paths = source_paths, request_registry = retrieved$registry, request_inventory = inventory, staged = staged, retrieval = retrieved))
+    return(run_era5land_daily_mean_family(config_path = config_path, mode = "process", dry_run = FALSE, start_date = start_date, end_date = end_date, output_root = output_root, product_ids = product_ids, overwrite = overwrite, rebuild_all_weeks = rebuild_all_weeks, transfer_fun = transfer_fun, stage_fun = stage_fun, internal_call = TRUE))
+  }
+
+  if (mode %in% c("process", "aggregate") && !internal_call && length(requests) > 1L) {
+    results <- lapply(requests, function(request) run_era5land_daily_mean_family(config_path = config_path, mode = mode, dry_run = FALSE, output_root = output_root, product_ids = product_ids, overwrite = overwrite, rebuild_all_weeks = rebuild_all_weeks, transfer_fun = transfer_fun, stage_fun = stage_fun, request_override = request, internal_call = TRUE))
+    statuses <- vapply(results, function(x) as.character(x$status %||% "failed"), character(1))
+    status <- if (all(statuses == "success")) "success" else if (all(statuses %in% c("success", "planned"))) "partial_success" else "failed"
+    return(list(status = status, family_status = status, run_id = run_id, run_dir = run_dir, requests = requests, request_registry = registry, request_inventory = registry_inventory, request_results = results, source_paths = source_paths, products = product_ids))
+  }
 
   download_result <- if (mode %in% c("download", "full")) tryCatch(download_cds_requests(requests, paths = source_paths, run_dir = run_dir, dry_run = FALSE, overwrite = overwrite, config = cfg, run_id = run_id, transfer_fun = transfer_fun), error = function(e) fail_family("download", conditionMessage(e))) else data.frame()
   if (mode == "download") return(list(status = "downloaded", run_id = run_id, run_dir = run_dir, requests = requests, download = download_result, source_paths = source_paths, products = product_ids))
   raw_path <- if (nrow(download_result) && "final_raw_path" %in% names(download_result)) download_result$final_raw_path[[1L]] else NULL
-  if (is.null(raw_path) || !file.exists(raw_path)) {
-    info <- find_reusable_raw_artifact(req, source_paths); candidates <- c(info$candidates, info$partials)
-    valid <- candidates[vapply(candidates, function(p) isTRUE(validate_downloaded_target(p, req)$valid), logical(1))]
-     if (!length(valid)) fail_family("raw_validation", paste0("Shared ERA5-Land raw bundle is missing: ", file.path(source_paths$raw_dir, req$target)))
-    finalized <- finalize_raw_artifact(valid[[1L]], req, source_paths, run_dir, info$partials); finalized$raw_reused <- TRUE; raw_path <- finalized$final_raw_path
+  if (is.null(raw_path) || !isTRUE(era5land_validate_raw_archive(raw_path, req)$valid)) {
+    raw_path <- era5land_local_archive(req, source_paths)
+    if (is.null(raw_path)) fail_family("raw_validation", paste0("Shared ERA5-Land raw bundle is missing or invalid: ", file.path(source_paths$raw_dir, req$target)))
   }
   inventory <- tryCatch(era5land_extract_archive(raw_path, source_paths$extracted_dir, req$request_hash, req$raw_request_dates, run_dir), error = function(e) fail_family("extraction", conditionMessage(e)))
   source_map <- attr(inventory, "source_map")
